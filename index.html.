@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macro Test Platform</title>
+
+<style>
+:root {
+  --navy-900: #071b3a;
+  --navy-700: #123d75;
+  --navy-800: #092750;
+  --ink: #17243a;
+  --muted: #5d6c80;
+  --line: #dce2ea;
+  --bg: #f0f3f8;
+  --surface: #ffffff;
+  --soft: #f6f8fb;
+  --info: #e8f1ff;
+  --danger: #b52d35;
+  --ok: #1f7a4d;
+  --warn: #a8610a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+header {
+  background: var(--navy-900);
+  color: #fff;
+  padding: 22px;
+  text-align: center;
+}
+header h1 { margin: 0; font-size: 23px; }
+header p { margin: 6px 0 0; color: #cbd7e8; }
+
+.banner {
+  background: #fff4d6;
+  color: #5c4300;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.container { max-width: 760px; margin: 25px auto; padding: 15px; }
+
+.card {
+  background: var(--surface);
+  padding: 22px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  box-shadow: 0 3px 12px #0000000c;
+}
+
+h2 { color: #0a2850; margin-top: 0; }
+h3 { color: #0a2850; }
+
+label.field { display: block; font-size: 14px; color: var(--muted); }
+
+input[type=text], input[type=password], input[type=number], select, textarea {
+  width: 100%;
+  padding: 13px;
+  margin: 8px 0 15px;
+  border: 1px solid #ccd4df;
+  border-radius: 7px;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+button {
+  background: var(--navy-700);
+  color: #fff;
+  border: none;
+  padding: 13px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 15px;
+}
+button:hover:not(:disabled) { background: var(--navy-800); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible, .option:focus-within {
+  outline: 3px solid #7aa7e6;
+  outline-offset: 2px;
+}
+
+.secondary { background: #53657d; }
+.danger { background: var(--danger); }
+.small { padding: 8px 12px; font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.hidden { display: none !important; }
+
+.option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin: 9px 0;
+  cursor: pointer;
+}
+.option input { margin: 3px 0 0; flex: none; }
+
+.question {
+  padding: 15px;
+  background: var(--soft);
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+small, .muted { color: var(--muted); }
+
+.msg { min-height: 1.2em; color: var(--danger); }
+.msg.ok { color: var(--ok); }
+
+.result { background: var(--info); padding: 15px; border-radius: 8px; margin-top: 15px; }
+.big-score { font-size: 44px; font-weight: bold; color: var(--navy-700); margin: 6px 0; }
+
+/* tabs */
+.tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.tabs button { background: #dfe6f0; color: var(--ink); }
+.tabs button.active { background: var(--navy-700); color: #fff; }
+
+/* test timer */
+.timerbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--navy-900);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.timerbar.low { background: var(--danger); }
+.timer { font-size: 22px; font-weight: bold; font-variant-numeric: tabular-nums; }
+
+/* stats and tables */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--soft); border-radius: 8px; padding: 12px; }
+.stat b { display: block; font-size: 22px; color: var(--navy-700); }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #eef1f5; white-space: nowrap; }
+th { color: var(--muted); font-weight: bold; }
+
+.pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; background: #e6ebf2; }
+.pill.ok { background: #dff3e8; color: var(--ok); }
+.pill.warn { background: #fdecc8; color: var(--warn); }
+.pill.bad { background: #f8dcde; color: var(--danger); }
+
+.bar { height: 8px; background: #e6ebf2; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+.bar > i { display: block; height: 100%; background: var(--navy-700); }
+
+/* modal */
+.modal { position: fixed; inset: 0; background: #071b3a99; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
+.modal-box { background: #fff; border-radius: 12px; padding: 22px; max-width: 440px; width: 100%; }
+.modal-box h3 { margin-top: 0; }
+.modal-box p { white-space: pre-line; }
+
+hr { border: 0; border-top: 1px solid #eee; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>MACRO TEST PLATFORM</h1>
+  <p>Knowledge assessment system</p>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+
+<div class="container">
+
+<!-- LOGIN -->
+<section id="view-login" class="card hidden">
+  <h2>Sign in</h2>
+
+  <label class="field" for="role">Access</label>
+  <select id="role">
+    <option value="student">Student</option>
+    <option value="admin">Administrator</option>
+  </select>
+
+  <label class="field" for="username" id="usernameLabel">Username</label>
+  <input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
+
+  <label class="field" for="password">Password</label>
+  <input id="password" type="password" autocomplete="current-password">
+
+  <button id="loginBtn">Sign in</button>
+
+  <p id="loginMsg" class="msg" role="alert"></p>
+  <small id="loginHint">New student? Choose a username and a password (at least 6 characters) to create your account.</small>
+</section>
+
+<!-- ADMIN -->
+<section id="view-admin" class="hidden">
+
+  <div class="card">
+    <h2>Teacher dashboard</h2>
+    <p class="muted">Signed in as administrator.</p>
+    <div class="tabs" role="tablist">
+      <button data-tab="questions" class="active">Questions</button>
+      <button data-tab="settings">Settings</button>
+      <button data-tab="results">Results</button>
+    </div>
+    <p id="adminMsg" class="msg" role="status"></p>
+  </div>
+
+  <div id="tab-questions">
+    <div class="card">
+      <h3 id="formTitle">Add a question</h3>
+      <input id="questionText" type="text" placeholder="Write your question">
+      <input id="optionA" type="text" placeholder="Option A">
+      <input id="optionB" type="text" placeholder="Option B">
+      <input id="optionC" type="text" placeholder="Option C">
+      <input id="optionD" type="text" placeholder="Option D">
+
+      <label class="field" for="correct">Correct answer</label>
+      <select id="correct">
+        <option value="0">Option A</option>
+        <option value="1">Option B</option>
+        <option value="2">Option C</option>
+        <option value="3">Option D</option>
+      </select>
+
+      <div class="row">
+        <button id="saveQuestionBtn">Add question</button>
+        <button id="cancelEditBtn" class="secondary hidden">Cancel editing</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Question bank <span id="qCount" class="muted"></span></h3>
+      <div id="questionList"></div>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="hidden">
+    <div class="card">
+      <h3>Test settings</h3>
+
+      <label class="field" for="setDuration">Time limit (minutes)</label>
+      <input id="setDuration" type="number" min="1" max="300" step="1">
+
+      <label class="field" for="setWarnings">Warnings allowed before automatic submission</label>
+      <input id="setWarnings" type="number" min="0" max="10" step="1">
+
+      <label class="option"><input id="setShuffleQ" type="checkbox"><span>Shuffle question order for each student</span></label>
+      <label class="option"><input id="setShuffleO" type="checkbox"><span>Shuffle answer options for each student</span></label>
+
+      <p class="muted">Changing the time limit also affects students who are already taking the test.</p>
+      <button id="saveSettingsBtn">Save settings</button>
+    </div>
+  </div>
+
+  <div id="tab-results" class="hidden">
+    <div class="card">
+      <h3>Student results</h3>
+      <div class="row" style="margin-bottom:14px">
+        <button id="refreshBtn" class="secondary">Refresh</button>
+        <button id="publishBtn">Grade and publish results</button>
+        <button id="exportBtn" class="secondary">Export CSV</button>
+      </div>
+      <div id="stats" class="stats"></div>
+      <div id="results" class="table-wrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>Question analysis</h3>
+      <p class="muted">Share of students who answered each question correctly.</p>
+      <div id="analysis"></div>
+    </div>
+  </div>
+
+  <button class="secondary" data-action="logout">Log out</button>
+</section>
+
+<!-- STUDENT -->
+<section id="view-student" class="hidden">
+
+  <div id="studentIntro" class="card">
+    <h2>Student dashboard</h2>
+    <p id="studentWelcome"></p>
+    <div id="introBody"></div>
+    <div class="row">
+      <button id="startBtn">Start test</button>
+      <button id="resumeBtn" class="hidden">Resume test</button>
+    </div>
+    <p id="studentStatus" class="msg" role="status"></p>
+  </div>
+
+  <div id="testArea" class="card hidden">
+    <div id="timerBar" class="timerbar">
+      <span id="progress">0 / 0 answered</span>
+      <span id="timer" class="timer">--:--</span>
+    </div>
+    <div id="questionsArea"></div>
+    <button id="submitBtn">Submit test</button>
+    <p id="testMessage" class="msg" role="alert"></p>
+  </div>
+
+  <div id="studentResult" class="card hidden">
+    <h2 id="resultTitle">Test result</h2>
+    <div id="resultContent"></div>
+  </div>
+
+  <button class="secondary" data-action="logout">Log out</button>
+</section>
+
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <h3 id="modalTitle"></h3>
+    <p id="modalBody"></p>
+    <div class="row">
+      <button id="modalOk">OK</button>
+      <button id="modalCancel" class="secondary hidden">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* =====================================================================
+   CONFIGURATION
+   - Leave FIREBASE_CONFIG as null to run in demo mode (data stays in this
+     browser only). Paste your Firebase web config to go online.
+   - ADMIN_EMAIL must match the email used in firestore.rules.
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
+  authDomain: "school-of-communicators.firebaseapp.com",
+  projectId: "school-of-communicators",
+  storageBucket: "school-of-communicators.firebasestorage.app",
+  messagingSenderId: "601098815550",
+  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f"
+};
+/* Example:
+const FIREBASE_CONFIG = {
+  apiKey: "...", authDomain: "...", projectId: "...", appId: "..."
+};
+*/
+const ADMIN_EMAIL = "justinoquinta704@gmail.com";
+const DEMO_ADMIN = { email: "admin@demo", password: "demo123" };
+
+const FIREBASE_VERSION = "10.12.2";
+const GRACE_MS = 90 * 1000; // must match the grace period in firestore.rules
+const DEFAULTS = { durationMin: 30, maxWarnings: 2, shuffleQuestions: true, shuffleOptions: true };
+const LETTERS = "ABCD";
+
+/* =====================================================================
+   HELPERS
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const show = (id, on = true) => $(id).classList.toggle("hidden", !on);
+
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const newId = () => "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const fmtDate = ms => (ms ? new Date(ms).toLocaleString() : "");
+
+function fmtClock(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+
+async function hashPassword(pw) {
+  if (globalThis.crypto?.subtle) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("macro:" + pw));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  return "plain:" + pw;
+}
+
+/* Modal dialog that returns a promise (true = OK, false = cancel). */
+let pendingModal = null;
+function closeModal(result = false) {
+  show("modal", false);
+  if (pendingModal) { pendingModal(result); pendingModal = null; }
+}
+function ask({ title, body, ok = "OK", cancel = null }) {
+  closeModal(false);
+  return new Promise(resolve => {
+    $("modalTitle").textContent = title;
+    $("modalBody").textContent = body;
+    $("modalOk").textContent = ok;
+    $("modalCancel").textContent = cancel || "Cancel";
+    show("modalCancel", !!cancel);
+    show("modal");
+    pendingModal = resolve;
+    $("modalOk").focus();
+  });
+}
+$("modalOk").onclick = () => closeModal(true);
+$("modalCancel").onclick = () => closeModal(false);
+
+/* ========================================================

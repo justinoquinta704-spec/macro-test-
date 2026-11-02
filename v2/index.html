@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macro Test Platform</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+  <h1>MACRO TEST PLATFORM</h1>
+  <p>Knowledge assessment system</p>
+</header>
+
+<div class="container">
+
+<!-- LOGIN -->
+<section id="view-login" class="card hidden">
+  <h2>Sign in</h2>
+
+  <label class="field" for="role">Access</label>
+  <select id="role">
+    <option value="student">Student</option>
+    <option value="admin">Administrator</option>
+  </select>
+
+  <label class="field" for="email">Email</label>
+  <input id="email" type="text" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false">
+
+  <label class="field" for="password">Password</label>
+  <input id="password" type="password" autocomplete="current-password">
+
+  <button id="loginBtn">Sign in</button>
+  <p id="loginMsg" class="msg" role="alert"></p>
+
+  <div id="studentLinks">
+    <button type="button" id="forgotBtn" class="link">Forgot password?</button>
+  </div>
+</section>
+
+<!-- ADMIN -->
+<section id="view-admin" class="hidden">
+
+  <div class="card">
+    <h2>Teacher dashboard</h2>
+    <div class="tabs" role="tablist">
+      <button data-tab="questions" class="active">Questions</button>
+      <button data-tab="students">Students</button>
+      <button data-tab="settings">Settings</button>
+      <button data-tab="results">Results</button>
+    </div>
+    <p id="adminMsg" class="msg" role="status"></p>
+  </div>
+
+  <div id="tab-questions">
+    <div class="card">
+      <h3 id="formTitle">Add a question</h3>
+
+      <label class="field" for="qType">Question type</label>
+      <select id="qType">
+        <option value="mcq">Multiple choice (graded automatically)</option>
+        <option value="text">Written answer (you grade it)</option>
+        <option value="audio">Audio answer (you grade it)</option>
+      </select>
+
+      <label class="field" for="qLevel">Level</label>
+      <select id="qLevel">
+        <option value="basic">Basic</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+
+      <input id="questionText" type="text" placeholder="Write your question">
+
+      <div id="mcqFields">
+        <input id="optionA" type="text" placeholder="Option A">
+        <input id="optionB" type="text" placeholder="Option B">
+        <input id="optionC" type="text" placeholder="Option C">
+        <input id="optionD" type="text" placeholder="Option D">
+        <label class="field" for="correct">Correct answer</label>
+        <select id="correct">
+          <option value="0">Option A</option>
+          <option value="1">Option B</option>
+          <option value="2">Option C</option>
+          <option value="3">Option D</option>
+        </select>
+      </div>
+
+      <label class="field">Audio for this question (optional, up to 2 minutes)</label>
+      <div id="promptRec"></div>
+      <label class="field" for="promptFile" style="margin-top:10px">Or upload a small audio file (max 700 KB)</label>
+      <input id="promptFile" type="file" accept="audio/*">
+
+      <div class="row">
+        <button id="saveQuestionBtn">Add question</button>
+        <button id="cancelEditBtn" class="secondary hidden">Cancel editing</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Question bank <span id="qCount" class="muted"></span></h3>
+      <div id="questionList"></div>
+    </div>
+  </div>
+
+  <div id="tab-students" class="hidden">
+    <div class="card">
+      <h3>Add a student</h3>
+      <p class="muted">Students cannot create accounts by themselves. Give each student the email and password you set here.</p>
+      <label class="field" for="stuName">Full name</label>
+      <input id="stuName" type="text" autocomplete="off">
+      <label class="field" for="stuEmail">Email (use the student's real email so they can reset the password)</label>
+      <input id="stuEmail" type="text" inputmode="email" autocapitalize="none" autocomplete="off" spellcheck="false">
+      <label class="field" for="stuLevel">Level</label>
+      <select id="stuLevel">
+        <option value="basic">Basic</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+      <label class="field" for="stuPass">Password (at least 6 characters)</label>
+      <input id="stuPass" type="text" autocomplete="off" spellcheck="false">
+      <div class="row">
+        <button id="addStudentBtn">Add student</button>
+        <button id="genPassBtn" class="secondary" type="button">Generate password</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Students <span id="stuCount" class="muted"></span></h3>
+      <div id="studentList" class="table-wrap"></div>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="hidden">
+    <div class="card">
+      <h3>Test settings</h3>
+
+      <label class="field" for="setDuration">Time limit (minutes)</label>
+      <input id="setDuration" type="number" min="1" max="300" step="1">
+
+      <label class="field" for="setWarnings">Warnings allowed before automatic submission</label>
+      <input id="setWarnings" type="number" min="0" max="10" step="1">
+
+      <label class="option"><input id="setShuffleQ" type="checkbox"><span>Shuffle question order for each student</span></label>
+      <label class="option"><input id="setShuffleO" type="checkbox"><span>Shuffle answer options for each student</span></label>
+
+      <p class="muted">Changing the time limit also affects students who are already taking the test.</p>
+      <button id="saveSettingsBtn">Save settings</button>
+    </div>
+  </div>
+
+  <div id="tab-results" class="hidden">
+    <div class="card">
+      <h3>Student results</h3>
+      <label class="field" for="lvlFilter">Show</label>
+      <select id="lvlFilter">
+        <option value="all">All levels</option>
+        <option value="basic">Basic</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+      <div class="row" style="margin-bottom:14px">
+        <button id="refreshBtn" class="secondary">Refresh</button>
+        <button id="publishBtn">Grade and publish results</button>
+        <button id="exportBtn" class="secondary">Export CSV</button>
+      </div>
+      <div id="stats" class="stats"></div>
+      <div id="results" class="table-wrap"></div>
+    </div>
+
+    <div id="reviewPanel" class="card hidden"></div>
+
+    <div class="card">
+      <h3>Previous attempts</h3>
+      <div id="history" class="table-wrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>Question analysis</h3>
+      <div id="analysis"></div>
+    </div>
+  </div>
+
+  <button class="secondary" data-action="logout">Log out</button>
+</section>
+
+<!-- STUDENT -->
+<section id="view-student" class="hidden">
+
+  <div id="studentIntro" class="card">
+    <h2>Student dashboard</h2>
+    <p id="studentWelcome"></p>
+    <div id="introBody"></div>
+    <div class="row">
+      <button id="startBtn">Start test</button>
+      <button id="resumeBtn" class="hidden">Resume test</button>
+    </div>
+    <p id="studentStatus" class="msg" role="status"></p>
+  </div>
+
+  <div id="testArea" class="card hidden">
+    <div id="timerBar" class="timerbar">
+      <span id="progress">0 / 0 answered</span>
+      <span id="timer" class="timer">--:--</span>
+    </div>
+    <div id="questionsArea"></div>
+    <button id="submitBtn">Submit test</button>
+    <p id="testMessage" class="msg" role="alert"></p>
+  </div>
+
+  <div id="studentResult" class="card hidden">
+    <h2 id="resultTitle">Test result</h2>
+    <div id="resultContent"></div>
+  </div>
+
+  <button class="secondary" data-action="logout">Log out</button>
+</section>
+
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <h3 id="modalTitle"></h3>
+    <p id="modalBody"></p>
+    <div class="row">
+      <button id="modalOk">OK</button>
+      <button id="modalCancel" class="secondary hidden">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="audio.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+<script src="student2.js"></script>
+<script src="admin.js"></script>
+<script src="review.js"></script>
+<script src="results.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

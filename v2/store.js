@@ -154,13 +154,27 @@ async function createFirebaseStore(cfg) {
         await b.commit();
       }
     },
-    /* Archives the attempt in "history", then clears it so the student can retake. */
-    async resetStudent(uid, record, audioIds) {
+    /* Archives everything (summary, answers, recordings) and clears the attempt so the student
+       can retake. Nothing is deleted before the copies are saved. */
+    async archiveAttempt(uid, hid, record, detail, qids) {
+      const audios = [];
+      for (const qid of qids) {
+        const d = await one("answers_audio", uid + "_" + qid);
+        if (d) audios.push([qid, d.data]);
+      }
+      for (const [qid, data] of audios) await F.setDoc(ref("history_audio", hid + "_" + qid), { hid, uid, qid, data });
       const b = F.writeBatch(db);
-      b.set(ref("history", uid + "_" + Date.now()), { ...record, uid, archivedAt: Date.now() });
+      b.set(ref("history", hid), { ...record, uid, archivedAt: Date.now() });
+      b.set(ref("history_detail", hid), { uid, ...detail });
       ["attempts", "submissions", "results", "grades"].forEach(c => b.delete(ref(c, uid)));
-      audioIds.forEach(qid => b.delete(ref("answers_audio", uid + "_" + qid)));
+      audios.forEach(([qid]) => b.delete(ref("answers_audio", uid + "_" + qid)));
       await b.commit();
-    }
+    },
+    async getMyHistory(uid) {
+      const snap = await F.getDocs(F.query(F.collection(db, "history"), F.where("uid", "==", uid)));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    getHistoryDetail: hid => one("history_detail", hid),
+    async getHistoryAudio(hid, qid) { const d = await one("history_audio", hid + "_" + qid); return d ? d.data : null; }
   };
 }

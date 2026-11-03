@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Macro Test Platform</title>
+<style>
+:root{--navy:#0b2a5b;--blue:#143d78;--soft:#e8f0fe;--bg:#eef2f8;--ink:#1a2238;--mut:#5b6785}
+*{box-sizing:border-box}
+body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#071d3d;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+header h1{font-size:18px;margin:0}
+.hr{display:flex;gap:8px}
+header button{color:#fff;background:none;border:1px solid #fff6;border-radius:8px;padding:7px 12px;font-size:14px}
+main{max-width:760px;margin:0 auto;padding:12px}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px #0001}
+h2{font-size:18px;color:var(--navy);margin:0 0 12px}
+.hello{font-size:22px;font-weight:700;color:var(--navy);margin:0}
+.sub{color:var(--mut);font-size:14px;margin-top:4px}
+.notice{padding:12px;background:#f6f8fc;border-radius:12px;margin-bottom:10px}
+.notice h3{margin:0 0 4px;font-size:16px;color:var(--navy)}
+.notice p{margin:6px 0;white-space:pre-wrap;font-size:15px;line-height:1.45}
+.meta{font-size:12px;color:var(--mut);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tag{background:var(--soft);color:var(--navy);border-radius:999px;padding:2px 8px;font-size:12px}
+.new{background:var(--blue);color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
+input,textarea,select{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;font-family:inherit;margin-bottom:8px;background:#fff}
+textarea{min-height:90px;resize:vertical}
+button.p{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px}
+button.d{background:#fde8e8;color:#b42318;border:0;border-radius:8px;padding:5px 10px;font-size:13px}
+a.btn{display:inline-block;background:var(--soft);color:var(--navy);text-decoration:none;border-radius:10px;padding:10px 16px;font-size:15px}
+.stu{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.stu span{flex:1;font-size:15px}.stu input{flex:1;margin:0}
+.note{color:var(--mut);font-size:14px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i="home">Home</h1>
+  <div class="hr">
+    <button id="lang">PT</button>
+    <button id="out" data-i="logout">Log out</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <p class="hello" id="hello"></p>
+    <div class="sub" id="grp"></div>
+    <div style="margin-top:12px"><a class="btn" href="sala.html" data-i="classroom">Classroom</a></div>
+  </div>
+
+  <div class="card hide" id="tPost">
+    <h2 data-i="post">Post notice</h2>
+    <input type="text" id="nTitle" data-p="title">
+    <textarea id="nText" data-p="message"></textarea>
+    <select id="nTarget"></select>
+    <button class="p" id="nSend" data-i="publish">Publish</button>
+  </div>
+
+  <div class="card hide" id="tGroups">
+    <h2 data-i="groups">Groups</h2>
+    <div id="stuList" class="note"></div>
+    <datalist id="gl"></datalist>
+  </div>
+
+  <div class="card">
+    <h2 data-i="notices">Notices</h2>
+    <div id="notices" class="note"></div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ====== CONFIG ======
+const FIREBASE_CONFIG = {
+  // paste your config here (apiKey, authDomain, projectId, appId...)
+};
+const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
+// =====================
+
+const TX = {
+  en: { home:'Home', logout:'Log out', hello:'Hello, ', notices:'Notices', none:'No notices yet.', newb:'New',
+        classroom:'Classroom', all:'All students', group:'Group', yourGroup:'Your group: ', post:'Post notice',
+        title:'Title', message:'Message', publish:'Publish', del:'Delete', groups:'Groups', groupPh:'Group name',
+        noStu:'No students yet. They appear here after opening this page once.', confirm:'Delete this notice?', toGroup:'Group: ' },
+  pt: { home:'Início', logout:'Sair', hello:'Olá, ', notices:'Avisos', none:'Ainda não há avisos.', newb:'Novo',
+        classroom:'Sala de aula', all:'Todos os alunos', group:'Grupo', yourGroup:'O teu grupo: ', post:'Publicar aviso',
+        title:'Título', message:'Mensagem', publish:'Publicar', del:'Apagar', groups:'Grupos', groupPh:'Nome do grupo',
+        noStu:'Ainda não há alunos. Aparecem aqui depois de abrirem esta página uma vez.', confirm:'Apagar este aviso?', toGroup:'Grupo: ' }
+};
+let lang = 'en';
+try { lang = localStorage.getItem('lang') || 'en'; } catch (e) {}
+const t = k => TX[lang][k];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth(), db = firebase.firestore();
+let user, isT = false, myGroup = '', notices = [], students = [], seenAtLoad = 0;
+try { seenAtLoad = +localStorage.getItem('avisosSeen') || 0; } catch (e) {}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i]').forEach(el => el.textContent = t(el.dataset.i));
+  document.querySelectorAll('[data-p]').forEach(el => el.placeholder = t(el.dataset.p));
+  $('lang').textContent = lang === 'en' ? 'PT' : 'EN';
+  if (user) { head(); renderNotices(); renderGroups(); fillTargets(); }
+}
+$('lang').onclick = () => { lang = lang === 'en' ? 'pt' : 'en'; try { localStorage.setItem('lang', lang); } catch (e) {} applyLang(); };
+$('out').onclick = async () => { await auth.signOut(); location.href = 'index.html'; };
+
+const nameOf = () => user.displayName || (user.email || '').split('@')[0];
+function head() {
+  $('hello').textContent = t('hello') + nameOf();
+  $('grp').textContent = myGroup ? t('yourGroup') + myGroup : '';
+}
+
+auth.onAuthStateChanged(u => {
+  if (!u) { location.href = 'index.html'; return; }
+  user = u; isT = (u.email || '').toLowerCase() === TEACHER_EMAIL;
+  $('tPost').classList.toggle('hide', !isT); $('tGroups').classList.toggle('hide', !isT);
+  if (!isT) {
+    const ref = db.collection('alunos').doc(u.uid);
+    ref.set({ name: nameOf(), email: u.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
+    ref.onSnapshot(s => { myGroup = (s.exists && s.data().grupo) || ''; head(); renderNotices(); });
+  } else {
+    db.collection('alunos').onSnapshot(s => {
+      students = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      renderGroups(); fillTargets();
+    });
+  }
+  db.collection('avisos').orderBy('t', 'desc').limit(50).onSnapshot(s => {
+    notices = s.docs.map(d => ({ id: d.id, ...d.data() })); renderNotices();
+  });
+  applyLang();
+});
+
+function renderNotices() {
+  const box = $('notices');
+  const list = notices.filter(n => isT || n.target === 'all' || n.target === myGroup);
+  if (!list.length) { box.textContent = t('none'); return; }
+  box.innerHTML = '';
+  const locale = lang === 'pt' ? 'pt-PT' : 'en-GB';
+  list.forEach(n => {
+    const el = document.createElement('div'); el.className = 'notice';
+    const when = new Date(n.t).toLocaleString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const tag = n.target === 'all' ? t('all') : t('toGroup') + esc(n.target);
+    el.innerHTML = '<h3>' + esc(n.title || '') + '</h3><p>' + esc(n.text || '') + '</p>' +
+      '<div class="meta"><span>' + when + '</span><span class="tag">' + tag + '</span>' +
+      (!isT && n.t > seenAtLoad ? '<span class="new">' + t('newb') + '</span>' : '') + '</div>';
+    if (isT) {
+      const b = document.createElement('button'); b.className = 'd'; b.textContent = t('del'); b.style.marginTop = '8px';
+      b.onclick = () => { if (confirm(t('confirm'))) db.collection('avisos').doc(n.id).delete(); };
+      el.appendChild(b);
+    }
+    box.appendChild(el);
+  });
+  if (!isT) { try { localStorage.setItem('avisosSeen', String(Math.max(seenAtLoad, ...list.map(n => n.t)))); } catch (e) {} }
+}
+
+ apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
+
+  authDomain: "school-of-communicators.firebaseapp.com",
+
+  projectId: "school-of-communicators",
+
+  storageBucket: "school-of-communicators.firebasestorage.app",
+
+  messagingSenderId: "601098815550",
+
+  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
+
+  measurementId: "G-45TQ4JWK8V"
+};
+applyLang();
+</script>
+</body>
+</html>

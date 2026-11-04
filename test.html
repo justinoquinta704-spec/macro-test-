@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste</title>
+</head>
+<body style="font-family:sans-serif;padding:16px;font-size:18px">
+<h2>Teste da home</h2>
+<div id="o"></div>
+<script>
+const o = document.getElementById('o');
+function say(t, ok) {
+  o.innerHTML += '<p style="color:' + (ok ? 'green' : 'red') + '">' + (ok ? 'OK: ' : 'ERRO: ') + t + '</p>';
+}
+say('o JavaScript funciona', true);
+fetch('home.html?x=' + Date.now()).then(r => r.text()).then(t => {
+  say('home.html abriu (' + t.length + ' letras)', true);
+  say(t.indexOf('apiKey') > -1 ? 'a configuração está no ficheiro' : 'a configuração NAO está no ficheiro', t.indexOf('apiKey') > -1);
+  const m = t.match(/<script>([\s\S]*?)<\/script>/);
+  try { new Function(m[1]); say('o código não tem erros de escrita', true); }
+  catch (e) { say('erro no código: ' + e.message, false); }
+}).catch(e => say('não consegui abrir home.html: ' + e, false));
+['app', 'auth', 'firestore'].forEach(n => {
+  const s = document.createElement('script');
+  s.src = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-' + n + '-compat.js';
+  s.onload = () => say('Firebase ' + n + ' carregou', true);
+  s.onerror = () => say('Firebase ' + n + ' NAO carregou', false);
+  document.head.appendChild(s);
+});
+</script>
+</body>
+</html>

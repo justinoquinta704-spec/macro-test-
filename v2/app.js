@@ -75,7 +75,7 @@ async function logout() {
   S.active = false;
   clearInterval(S.timer);
   await S.store.logout();
-  location.reload();
+    location.href = location.pathname;
 }
 
 /* =====================================================================

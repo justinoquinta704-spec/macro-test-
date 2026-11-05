@@ -10,29 +10,21 @@
 
 <header>
   <h1>MY PROFILE</h1>
-  <p>Your progress and results</p>
+  <p>Your account</p>
 </header>
 
 <div class="container">
-
   <div class="card">
     <h2 id="who">Loading…</h2>
     <p id="lvl" class="muted"></p>
     <div class="row">
+      <button onclick="location.href='dashboard.html'">Dashboard</button>
       <button class="secondary" onclick="location.href='home.html'">Home</button>
       <button class="secondary" onclick="location.href='index.html?tests=1'">Tests</button>
       <button class="secondary" id="outBtn">Log out</button>
     </div>
     <p id="msg" class="msg" role="alert"></p>
   </div>
-
-  <div id="dashboard" class="card hidden"></div>
-
-  <div id="empty" class="card hidden">
-    <h3>No results yet</h3>
-    <p class="muted">Your results and certificates will appear here after your teacher publishes them.</p>
-  </div>
-
 </div>
 
 <script src="core.js"></script>
@@ -44,7 +36,6 @@
 <script src="review.js"></script>
 <script src="results.js"></script>
 <script src="features.js"></script>
-<script src="dashboard.js"></script>
 <script>
 (async function () {
   try {
@@ -52,17 +43,12 @@
     const session = await S.store.init();
     if (!session) { location.href = "index.html"; return; }
     if (session.role === "admin") { location.href = "home.html"; return; }
-    S.session = session;
     document.getElementById("who").textContent = session.username;
     document.getElementById("lvl").textContent = (LEVELS[session.level] || "") + " level";
     document.getElementById("outBtn").onclick = async () => {
       await S.store.logout();
       location.href = "index.html";
     };
-    await renderDashboard();
-    if (document.getElementById("dashboard").classList.contains("hidden")) {
-      document.getElementById("empty").classList.remove("hidden");
-    }
   } catch (e) {
     document.getElementById("msg").textContent = "Could not load your profile: " + e.message;
   }

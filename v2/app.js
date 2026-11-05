@@ -57,6 +57,7 @@ async function route(session) {
   S.session = session;
   ["view-login", "view-admin", "view-student"].forEach(id => show(id, false));
   if (!session) show("view-login");
+       else if (!/[?&]tests/.test(location.search)) location.href = "home.html";
   else if (session.role === "admin") await showAdmin();
   else await showStudent();
 }

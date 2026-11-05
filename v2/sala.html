@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classroom · Macro Test Platform</title>
+<style>
+:root{--navy:#0b2a5b;--blue:#143d78;--soft:#e8f0fe;--bg:#eef2f8;--ink:#1a2238;--mut:#5b6785}
+*{box-sizing:border-box}
+body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#071d3d;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px;margin:0}
+header a,header button{color:#fff;background:none;border:1px solid #fff5;border-radius:8px;padding:6px 10px;font-size:14px;text-decoration:none}
+main{max-width:960px;margin:0 auto;padding:12px}
+.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px #0001}
+h2{font-size:18px;color:var(--navy);margin:0 0 10px}
+button.p{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:15px}
+button.s{background:var(--soft);color:var(--navy);border:0;border-radius:10px;padding:8px 12px;font-size:14px}
+button.on{background:var(--blue);color:#fff}
+button.d{background:#fde8e8;color:#b42318;border:0;border-radius:10px;padding:8px 12px}
+input[type=text]{padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.room{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;background:#f6f8fc;border-radius:12px;margin-bottom:8px}
+.hide{display:none!important}
+.tabs{display:flex;gap:8px;margin-bottom:10px}
+.wrap{width:100%;max-width:900px;margin:0 auto;position:relative;border:1px solid #cfd8ea;border-radius:8px;overflow:hidden;background:#fff}
+.wrap canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+#fg{touch-action:none}
+.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #aab}
+.sw.sel{box-shadow:0 0 0 3px var(--blue)}
+#msgs{height:260px;overflow-y:auto;background:#f6f8fc;border-radius:12px;padding:10px;margin-bottom:8px}
+.m{margin-bottom:8px;font-size:15px}.m b{color:var(--navy)}
+.note{color:var(--mut);font-size:14px}
+label.t{display:flex;align-items:center;gap:6px;font-size:14px}
+#ring{position:fixed;inset:0;background:#071d3df2;color:#fff;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
+#ring h2{color:#fff;font-size:28px;margin:0}#ring .big{font-size:18px;opacity:.85}
+#out{position:fixed;left:12px;right:12px;bottom:12px;z-index:40;background:#fff;border-radius:16px;padding:14px;box-shadow:0 4px 16px #0004;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#b8c0d4;margin-right:8px}.dot.on{background:#12b76a}
+</style>
+</head>
+<body>
+<header><h1>Classroom</h1><a href="home.html">Back</a></header>
+<main>
+
+<section id="lobby">
+  <div class="card hide" id="stuCard">
+    <h2>Students</h2>
+    <div id="stus" class="note">No student has opened the Classroom yet.</div>
+  </div>
+  <div class="card hide" id="meCard">
+    <h2>Talk to your teacher</h2>
+    <div class="row"><button class="p" id="callT">Call teacher</button><button class="s" id="myRoom">My private room</button></div>
+  </div>
+  <div class="card hide" id="newRoom">
+    <h2>New room</h2>
+    <div class="row"><input type="text" id="roomName" placeholder="Room name (e.g. Group A, or student name)"></div>
+    <button class="p" id="createBtn">Create room</button>
+  </div>
+  <div class="card">
+    <h2>Rooms</h2>
+    <div id="rooms" class="note">Loading…</div>
+  </div>
+</section>
+
+<section id="room" class="hide">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="rTitle" style="margin:0"></h2>
+      <div class="row">
+        <button class="s hide" id="copyBtn">Copy link</button>
+        <button class="s" id="exitBtn">Leave room</button>
+      </div>
+    </div>
+    <div class="row" id="joinRow">
+      <button class="p" id="joinBtn">Join call</button>
+      <label class="t"><input type="checkbox" id="camOff"> Camera off (voice only)</label>
+    </div>
+    <div class="note">The call opens in a new tab, so it has no time limit. Keep this tab open for the board and chat.</div>
+  </div>
+
+  <div class="tabs">
+    <button class="s on" id="tBoard">Board</button>
+    <button class="s" id="tChat">Chat</button>
+  </div>
+
+  <div class="card" id="boardCard">
+    <div class="card hide" id="tCtl" style="background:#f6f8fc;box-shadow:none">
+      <div class="row">
+        <label class="t"><input type="checkbox" id="showB"> Show board to students</label>
+        <label class="t"><input type="checkbox" id="allowD"> Students can write</label>
+      </div>
+      <div class="row">
+        <button class="s" id="blankBtn">Blank board</button>
+        <button class="s" id="pdfBtn">Upload PDF</button>
+        <input type="file" id="pdfIn" accept="application/pdf" class="hide">
+      </div>
+      <div class="note" id="pdfStat"></div>
+    </div>
+
+    <div id="lock" class="note hide">The teacher has not shared the board yet.</div>
+    <div id="boardArea">
+      <div class="row" id="tools">
+        <span class="sw sel" data-c="#0b2a5b" style="background:#0b2a5b"></span>
+        <span class="sw" data-c="#d92d20" style="background:#d92d20"></span>
+        <span class="sw" data-c="#12805c" style="background:#12805c"></span>
+        <span class="sw" data-c="#f79009" style="background:#f79009"></span>
+        <span class="sw" data-c="#111111" style="background:#111111"></span>
+        <select id="sz" class="s" style="padding:8px;border-radius:10px;border:0;background:var(--soft)">
+          <option value="2">Thin</option><option value="4" selected>Medium</option><option value="8">Thick</option>
+        </select>
+        <button class="s" id="undo">Undo</button>
+        <button class="d hide" id="clr">Clear page</button>
+      </div>
+      <div class="wrap" id="wrap"><canvas id="bg"></canvas><canvas id="fg"></canvas></div>
+      <div class="row hide" id="nav" style="justify-content:center">
+        <button class="s" id="prev">‹</button><span id="pgl" class="note"></span><button class="s" id="next">›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hide" id="chatCard">
+    <h2>Chat</h2>
+    <div id="msgs"></div>
+    <div class="row"><input type="text" id="msgIn" placeholder="Write a message"><button class="p" id="send">Send</button></div>
+  </div>
+</section>
+</main>
+
+<div id="ring" class="hide">
+  <div class="big">Incoming call</div>
+  <h2 id="ringName"></h2>
+  <div class="row" style="justify-content:center;gap:16px">
+    <button class="d" id="dec" style="padding:14px 22px;font-size:17px">Decline</button>
+    <button class="p" id="acc" style="padding:14px 22px;font-size:17px;background:#12805c">Answer</button>
+  </div>
+</div>
+<div id="out" class="hide">
+  <b id="outTxt"></b>
+  <span>
+    <button class="p hide" id="outJoin">Join call</button>
+    <button class="s" id="outCancel">Close</button>
+  </span>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
+  authDomain: "school-of-communicators.firebaseapp.com",
+  projectId: "school-of-communicators",
+  storageBucket: "school-of-communicators.firebasestorage.app",
+  messagingSenderId: "601098815550",
+  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
+  measurementId: "G-45TQ4JWK8V"
+};
+const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
+const JITSI_DOMAIN = 'meet.jit.si';
+const JITSI_PREFIX = 'SchoolOfCommunicators-';
+const MAX_PDF_PAGES = 40;
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth(), db = firebase.firestore();
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+let user, isT = false, roomId = null, room = {}, strokes = [], curPage = 0, color = '#0b2a5b';
+let unsubs = [], imgCache = {}, drawing = null;
+const bg = $('bg'), fg = $('fg');
+
+const nameOf = () => user.displayName || (user.email || 'Student').split('@')[0];
+const roomsCol = () => db.collection('salas');
+const canDraw = () => isT || (room.studentsCanDraw && room.boardOn);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+auth.onAuthStateChanged(u => {
+  if (!u) { $('rooms').innerHTML = 'Please <a href="index.html">log in</a> first.'; return; }
+  user = u; isT = (u.email || '').toLowerCase() === TEACHER_EMAIL;
+  $('newRoom').classList.toggle('hide', !isT);
+  $('stuCard').classList.toggle('hide', !isT);
+  $('meCard').classList.toggle('hide', isT);
+  loadLobby(); listenCalls();
+  if (isT) loadStudents(); else { beat(); setInterval(beat, 30000); }
+  const id = new URLSearchParams(location.search).get('sala');
+  if (id) enterRoom(id);
+});
+
+// ---------- Lobby ----------
+function loadLobby() {
+  const q = isT ? roomsCol() : roomsCol().where('open', '==', true);
+  const un = q.onSnapshot(s => {
+    const box = $('rooms');
+    if (s.empty) { box.textContent = 'No rooms yet.'; return; }
+    box.innerHTML = '';
+    s.docs.forEach(d => {
+      const r = d.data(), el = document.createElement('div');
+      el.className = 'room';
+      el.innerHTML = '<b>' + esc(r.name) + '</b><span></span>';
+      const sp = el.lastChild;
+      const b = document.createElement('button'); b.className = 'p'; b.textContent = 'Enter';
+      b.onclick = () => enterRoom(d.id); sp.appendChild(b);
+      if (isT) {
+        const x = document.createElement('button'); x.className = 'd'; x.textContent = 'Delete'; x.style.marginLeft = '6px';
+        x.onclick = async () => { if (confirm('Delete this room?')) { await wipe(d.id, 'strokes'); await wipe(d.id, 'messages'); await wipe(d.id, 'pages'); await roomsCol().doc(d.id).delete(); } };
+        sp.appendChild(x);
+      }
+      box.appendChild(el);
+    });
+  });
+  unsubs.push(un);
+}
+$('createBtn').onclick = async () => {
+  const n = $('roomName').value.trim(); if (!n) return;
+  await roomsCol().add({ name: n, open: true, boardOn: false, studentsCanDraw: false, mode: 'blank', page: 0, pages: 1, ratio: 1.6, createdBy: user.uid, t: Date.now() });
+  $('roomName').value = '';
+};
+async function wipe(id, sub, onlyPage) {
+  let q = roomsCol().doc(id).collection(sub);
+  const s = await q.get(); let batch = db.batch(), n = 0;
+  for (const d of s.docs) {
+    if (onlyPage !== undefined && d.data().page !== onlyPage) continue;
+    batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+  }
+  await batch.commit();
+}
+
+// ---------- Room ----------
+async function enterRoom(id) {
+  roomId = id; strokes = []; imgCache = {};
+  $('lobby').classList.add('hide'); $('room').classList.remove('hide');
+  $('tCtl').classList.toggle('hide', !isT); $('clr').classList.toggle('hide', !isT);
+  $('copyBtn').classList.toggle('hide', !isT); $('nav').classList.toggle('hide', !isT);
+  const ref = roomsCol().doc(id);
+  roomUn = [
+    ref.onSnapshot(s => {
+      if (!s.exists) { leaveRoom(); return; }
+      room = s.data(); $('rTitle').textContent = room.name;
+      if (!isT) curPage = room.page || 0;
+      $('showB').checked = !!room.boardOn; $('allowD').checked = !!room.studentsCanDraw;
+      const vis = isT || room.boardOn;
+      $('lock').classList.toggle('hide', vis); $('boardArea').classList.toggle('hide', !vis);
+      $('tools').classList.toggle('hide', !canDraw());
+      $('pgl').textContent = 'Page ' + (curPage + 1) + ' / ' + (room.pages || 1);
+      layout();
+    }),
+    ref.collection('strokes').orderBy('t').onSnapshot(s => { strokes = s.docs.map(d => ({ id: d.id, ...d.data() })); drawStrokes(); }),
+    ref.collection('messages').orderBy('t').limitToLast(100).onSnapshot(s => {
+      $('msgs').innerHTML = s.docs.map(d => { const m = d.data(); return '<div class="m"><b>' + esc(m.name) + ':</b> ' + esc(m.text) + '</div>'; }).join('');
+      $('msgs').scrollTop = 1e9;
+    })
+  ];
+}
+let roomUn = [];
+function leaveRoom() {
+  roomUn.forEach(u => u()); roomUn = []; stopCall();
+  roomId = null; $('room').classList.add('hide'); $('lobby').classList.remove('hide');
+  history.replaceState(null, '', location.pathname);
+}
+$('exitBtn').onclick = leaveRoom;
+$('copyBtn').onclick = () => { const u = location.origin + location.pathname + '?sala=' + roomId; navigator.clipboard.writeText(u); $('copyBtn').textContent = 'Copied'; setTimeout(() => $('copyBtn').textContent = 'Copy link', 1500); };
+
+// ---------- Call (Jitsi, opens in a new tab: no time limit) ----------
+const jitsiUrl = (rid, off) => 'https://' + JITSI_DOMAIN + '/' + JITSI_PREFIX + rid +
+  '#config.prejoinPageEnabled=false&config.startWithVideoMuted=' + !!off +
+  '&userInfo.displayName=' + encodeURIComponent('"' + nameOf() + '"');
+$('joinBtn').onclick = () => window.open(jitsiUrl(roomId, $('camOff').checked), '_blank');
+function stopCall() {}
+
+// ---------- Students + direct calls ----------
+const beat = () => db.collection('alunos').doc(user.uid).set({ name: nameOf(), email: user.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
+let actx = null, ringTimer = null, incoming = null, outRef = null, outRoom = null, outTimer = null, outUn = null;
+document.addEventListener('pointerdown', () => {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (actx && actx.state === 'suspended') actx.resume();
+});
+function beep() {
+  if (actx) [0, 0.28].forEach((d, i) => {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = i ? 520 : 440; g.gain.value = 0.15; o.connect(g); g.connect(actx.destination);
+    o.start(actx.currentTime + d); o.stop(actx.currentTime + d + 0.2);
+  });
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+}
+const ringOn = () => { ringOff(); beep(); ringTimer = setInterval(beep, 1600); };
+const ringOff = () => { clearInterval(ringTimer); ringTimer = null; };
+
+async function ensureDm(uid, name) {
+  const ref = roomsCol().doc('dm_' + uid), d = await ref.get();
+  if (!d.exists) await ref.set({ name: name, open: false, boardOn: false, studentsCanDraw: false, mode: 'blank', page: 0, pages: 1, ratio: 1.6, createdBy: user.uid, dm: uid, t: Date.now() });
+}
+function loadStudents() {
+  db.collection('alunos').onSnapshot(s => {
+    const box = $('stus'); if (s.empty) return;
+    const list = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    box.innerHTML = '';
+    list.forEach(st => {
+      const on = Date.now() - st.seen < 75000, el = document.createElement('div'); el.className = 'room';
+      el.innerHTML = '<span><span class="dot' + (on ? ' on' : '') + '"></span><b>' + esc(st.name) + '</b></span><span></span>';
+      const sp = el.lastChild;
+      const c = document.createElement('button'); c.className = 'p'; c.textContent = 'Call';
+      c.onclick = () => callStudent(st.uid, st.name); sp.appendChild(c);
+      const r = document.createElement('button'); r.className = 's'; r.style.marginLeft = '6px'; r.textContent = 'Room';
+      r.onclick = async () => { await ensureDm(st.uid, st.name); enterRoom('dm_' + st.uid); }; sp.appendChild(r);
+      box.appendChild(el);
+    });
+  });
+}
+function listenCalls() {
+  const to = isT ? 'teacher' : user.uid;
+  db.collection('chamadas').where('toUid', '==', to).where('status', '==', 'ringing').onSnapshot(s => {
+    const c = s.docs.map(x => ({ id: x.id, ...x.data() })).filter(x => Date.now() - x.t < 60000).sort((a, b) => b.t - a.t)[0];
+    if (!c) { $('ring').classList.add('hide'); ringOff(); incoming = null; return; }
+    incoming = c; $('ringName').textContent = c.fromName; $('ring').classList.remove('hide'); ringOn();
+  });
+}
+$('acc').onclick = async () => {
+  const c = incoming; if (!c) return;
+  window.open(jitsiUrl(c.roomId, false), '_blank');   // must run inside the tap
+  ringOff(); $('ring').classList.add('hide');
+  if (isT) await ensureDm(c.fromUid, c.fromName);
+  await db.collection('chamadas').doc(c.id).update({ status: 'accepted' });
+  enterRoom(c.roomId);
+};
+$('dec').onclick = async () => {
+  const c = incoming; if (!c) return; ringOff(); $('ring').classList.add('hide');
+  await db.collection('chamadas').doc(c.id).update({ status: 'declined' });
+};
+async function startCall(toUid, rid, label) {
+  const ref = await db.collection('chamadas').add({ fromUid: user.uid, fromName: isT ? 'Your teacher' : nameOf(), toUid, roomId: rid, status: 'ringing', t: Date.now() });
+  outRef = ref; outRoom = rid;
+  $('out').classList.remove('hide'); $('outJoin').classList.add('hide'); $('outCancel').textContent = 'Cancel';
+  $('outTxt').textContent = 'Calling ' + label + '…';
+  clearTimeout(outTimer); outTimer = setTimeout(() => ref.update({ status: 'missed' }).catch(() => {}), 45000);
+  if (outUn) outUn();
+  outUn = ref.onSnapshot(s => {
+    const c = s.data(); if (!c) return;
+    if (c.status === 'accepted') {
+      clearTimeout(outTimer); $('outTxt').textContent = label + ' answered';
+      $('outJoin').classList.remove('hide'); $('outCancel').textContent = 'Close'; outUn(); outUn = null;
+    } else if (c.status !== 'ringing') {
+      clearTimeout(outTimer); $('outTxt').textContent = c.status === 'declined' ? label + ' declined' : (c.status === 'missed' ? 'No answer' : 'Call ended');
+      $('outCancel').textContent = 'Close'; outUn(); outUn = null;
+    }
+  });
+}
+async function callStudent(uid, name) { await ensureDm(uid, name); startCall(uid, 'dm_' + uid, name); }
+$('callT').onclick = () => startCall('teacher', 'dm_' + user.uid, 'your teacher');
+$('myRoom').onclick = () => enterRoom('dm_' + user.uid);
+$('outJoin').onclick = () => { window.open(jitsiUrl(outRoom, false), '_blank'); $('out').classList.add('hide'); enterRoom(outRoom); };
+$('outCancel').onclick = () => {
+  if (outUn) { outUn(); outUn = null; } clearTimeout(outTimer);
+  if (outRef) outRef.update({ status: 'ended' }).catch(() => {});
+  $('out').classList.add('hide');
+};
+
+// ---------- Chat ----------
+async function sendMsg() {
+  const t = $('msgIn').value.trim(); if (!t) return;
+  $('msgIn').value = '';
+  await roomsCol().doc(roomId).collection('messages').add({ name: nameOf(), text: t, uid: user.uid, t: Date.now() });
+}
+$('send').onclick = sendMsg; $('msgIn').onkeydown = e => { if (e.key === 'Enter') sendMsg(); };
+$('tBoard').onclick = () => tab(true); $('tChat').onclick = () => tab(false);
+function tab(b) { $('boardCard').classList.toggle('hide', !b); $('chatCard').classList.toggle('hide', b); $('tBoard').classList.toggle('on', b); $('tChat').classList.toggle('on', !b); }
+
+// ---------- Teacher controls ----------
+$('showB').onchange = e => roomsCol().doc(roomId).update({ boardOn: e.target.checked });
+$('allowD').onchange = e => roomsCol().doc(roomId).update({ studentsCanDraw: e.target.checked });
+$('blankBtn').onclick = async () => {
+  if (!confirm('Switch to a blank board? This clears everything written.')) return;
+  await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {}; curPage = 0;
+  await roomsCol().doc(roomId).update({ mode: 'blank', page: 0, pages: 1, ratio: 1.6 });
+};
+$('pdfBtn').onclick = () => $('pdfIn').click();
+$('pdfIn').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const st = $('pdfStat'); st.textContent = 'Reading PDF…';
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
+    await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {};
+    let ratio = 0.75;
+    for (let i = 1; i <= n; i++) {
+      st.textContent = 'Preparing page ' + i + ' of ' + n + '…';
+      const pg = await pdf.getPage(i), vp0 = pg.getViewport({ scale: 1 });
+      const vp = pg.getViewport({ scale: 900 / vp0.width });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      if (i === 1) ratio = vp.width / vp.height;
+      await roomsCol().doc(roomId).collection('pages').doc(String(i - 1)).set({ img: c.toDataURL('image/jpeg', 0.6) });
+    }
+    curPage = 0;
+    await roomsCol().doc(roomId).update({ mode: 'pdf', page: 0, pages: n, ratio });
+    st.textContent = 'PDF ready (' + n + ' pages)' + (pdf.numPages > n ? ' – first ' + n + ' only' : '');
+  } catch (err) { st.textContent = 'Could not load this PDF.'; console.error(err); }
+  e.target.value = '';
+};
+$('prev').onclick = () => go(curPage - 1);
+$('next').onclick = () => go(curPage + 1);
+function go(p) {
+  if (p < 0) return;
+  const max = room.pages || 1;
+  if (p >= max) { if (room.mode === 'pdf') return; roomsCol().doc(roomId).update({ page: p, pages: p + 1 }); }
+  else roomsCol().doc(roomId).update({ page: p });
+  curPage = p;
+}
+$('clr').onclick = async () => { if (confirm('Clear this page?')) await wipe(roomId, 'strokes', curPage); };
+$('undo').onclick = async () => {
+  const mine = strokes.filter(s => s.uid === user.uid && s.page === curPage).pop();
+  if (mine) await roomsCol().doc(roomId).collection('strokes').doc(mine.id).delete();
+};
+
+// ---------- Board drawing ----------
+document.querySelectorAll('.sw').forEach(s => s.onclick = () => {
+  document.querySelectorAll('.sw').forEach(x => x.classList.remove('sel')); s.classList.add('sel'); color = s.dataset.c;
+});
+function layout() {
+  const w = $('wrap').clientWidth || 300, h = Math.round(w / (room.ratio || 1.6));
+  $('wrap').style.height = h + 'px';
+  [bg, fg].forEach(c => { c.width = w; c.height = h; });
+  drawBg(); drawStrokes();
+}
+async function drawBg() {
+  const ctx = bg.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, bg.width, bg.height);
+  if (room.mode !== 'pdf') return;
+  const p = curPage;
+  if (!imgCache[p]) {
+    const d = await roomsCol().doc(roomId).collection('pages').doc(String(p)).get();
+    if (!d.exists) return;
+    const im = new Image(); im.src = d.data().img; await new Promise(r => im.onload = r); imgCache[p] = im;
+  }
+  if (p === curPage) ctx.drawImage(imgCache[p], 0, 0, bg.width, bg.height);
+}
+function line(ctx, pts, c, size) {
+  const w = fg.width, h = fg.height;
+  ctx.strokeStyle = c; ctx.lineWidth = size * w / 800; ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(pts[0] * w, pts[1] * h);
+  if (pts.length === 2) ctx.lineTo(pts[0] * w + 0.1, pts[1] * h);
+  for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i] * w, pts[i + 1] * h);
+  ctx.stroke();
+}
+function drawStrokes() {
+  const ctx = fg.getContext('2d'); ctx.clearRect(0, 0, fg.width, fg.height);
+  strokes.filter(s => s.page === curPage).forEach(s => line(ctx, s.pts, s.color, s.size));
+}
+const pt = e => { const r = fg.getBoundingClientRect(); return [+((e.clientX - r.left) / r.width).toFixed(4), +((e.clientY - r.top) / r.height).toFixed(4)]; };
+fg.onpointerdown = e => {
+  if (!canDraw()) return;
+  fg.setPointerCapture(e.pointerId);
+  drawing = { pts: pt(e), color, size: +$('sz').value };
+  line(fg.getContext('2d'), drawing.pts, drawing.color, drawing.size);
+};
+fg.onpointermove = e => {
+  if (!drawing) return;
+  const p = pt(e), n = drawing.pts.length;
+  const seg = [drawing.pts[n - 2], drawing.pts[n - 1], p[0], p[1]];
+  drawing.pts.push(p[0], p[1]);
+  line(fg.getContext('2d'), seg, drawing.color, drawing.size);
+};
+fg.onpointerup = fg.onpointercancel = async () => {
+  if (!drawing) return; const d = drawing; drawing = null;
+  await roomsCol().doc(roomId).collection('strokes').add({ page: curPage, color: d.color, size: d.size, pts: d.pts, uid: user.uid, t: Date.now() });
+};
+window.addEventListener('resize', () => { if (roomId) layout(); });
+</script>
+</body>
+</html>

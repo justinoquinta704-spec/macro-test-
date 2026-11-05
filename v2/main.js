@@ -4,10 +4,11 @@ function renderStudents() {
   $("stuCount").textContent = ms.length ? `(${ms.length})` : "";
   $("studentList").innerHTML = ms.length ? `
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Level</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Level</th> <th></th></tr></thead><th>Test</th>
       <tbody>${ms.map(m => `<tr>
         <td>${esc(m.name)}</td><td>${esc(m.email)}</td>
         <td>${levelSelect("grade", `data-setlevel="${esc(m.uid)}"`, m.level || "basic")}</td>
+                <td><button class="${m.released ? "" : "secondary "}small" data-release="${esc(m.uid)}">${m.released ? "Released" : "Locked"}</button></td>
         <td><div class="row">
           <button class="secondary small" data-reset-pw="${esc(m.email)}">Send reset email</button>
           <button class="danger small" data-remove="${esc(m.uid)}">Remove access</button>
@@ -136,3 +137,14 @@ async function boot() {
 }
 
 boot();
+$("studentList").addEventListener("click", async e => {
+  const b = e.target.closest("button");
+  if (!b || !b.dataset.release) return;
+  const uid = b.dataset.release;
+  const m = S.admin.data.members.find(x => x.uid === uid);
+  try {
+    await S.store.setStudentRelease(uid, !(m && m.released));
+    await refreshAdmin();
+    adminMsg(m && m.released ? "Test locked." : "Test released.", true);
+  } catch (err) { adminMsg("Could not change: " + err.message); }
+});

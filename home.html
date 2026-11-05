@@ -26,15 +26,18 @@ h2{font-size:18px;color:var(--navy);margin:0 0 12px}
 input,textarea,select{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;font-family:inherit;margin-bottom:8px;background:#fff}
 textarea{min-height:90px;resize:vertical}
 button.p{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px}
+button.p:disabled{opacity:.5}
 button.d{background:#fde8e8;color:#b42318;border:0;border-radius:8px;padding:5px 10px;font-size:13px}
 a.btn{display:inline-block;background:var(--soft);color:var(--navy);text-decoration:none;border-radius:10px;padding:10px 16px;font-size:15px}
 .stu{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .stu span{flex:1;font-size:15px}.stu input{flex:1;margin:0}
 .note{color:var(--mut);font-size:14px}
+#err{background:#fde8e8;color:#b42318;padding:10px 16px;font-size:14px}
 .hide{display:none!important}
 </style>
 </head>
 <body>
+<div id="err" class="hide"></div>
 <header>
   <h1 data-i="home">Home</h1>
   <div class="hr">
@@ -74,20 +77,23 @@ a.btn{display:inline-block;background:var(--soft);color:var(--navy);text-decorat
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
+// ---- error banner: shows the reason if something fails ----
+function showErr(m) {
+  const e = document.getElementById('err');
+  if (e) { e.textContent = m; e.classList.remove('hide'); }
+}
+window.addEventListener('error', ev => showErr('Error: ' + ev.message));
+window.addEventListener('unhandledrejection', ev => showErr('Error: ' + ((ev.reason && ev.reason.message) || ev.reason)));
+if (typeof firebase === 'undefined') { showErr('Firebase did not load. Check your internet connection.'); throw new Error('Firebase missing'); }
+
 // ====== CONFIG ======
 const FIREBASE_CONFIG = {
-apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
-
+  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
   authDomain: "school-of-communicators.firebaseapp.com",
-
   projectId: "school-of-communicators",
-
   storageBucket: "school-of-communicators.firebasestorage.app",
-
   messagingSenderId: "601098815550",
-
   appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
-
   measurementId: "G-45TQ4JWK8V"
 };
 const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
@@ -108,10 +114,11 @@ try { lang = localStorage.getItem('lang') || 'en'; } catch (e) {}
 const t = k => TX[lang][k];
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dbErr = e => showErr('Firebase: ' + (e.code || e.message));
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth(), db = firebase.firestore();
-let user, isT = false, myGroup = '', notices = [], students = [], seenAtLoad = 0;
+let user = null, isT = false, myGroup = '', notices = [], students = [], seenAtLoad = 0;
 try { seenAtLoad = +localStorage.getItem('avisosSeen') || 0; } catch (e) {}
 
 function applyLang() {
@@ -121,7 +128,11 @@ function applyLang() {
   $('lang').textContent = lang === 'en' ? 'PT' : 'EN';
   if (user) { head(); renderNotices(); renderGroups(); fillTargets(); }
 }
-$('lang').onclick = () => { lang = lang === 'en' ? 'pt' : 'en'; try { localStorage.setItem('lang', lang); } catch (e) {} applyLang(); };
+$('lang').onclick = () => {
+  lang = lang === 'en' ? 'pt' : 'en';
+  try { localStorage.setItem('lang', lang); } catch (e) {}
+  applyLang();
+};
 $('out').onclick = async () => { await auth.signOut(); location.href = 'index.html'; };
 
 const nameOf = () => user.displayName || (user.email || '').split('@')[0];
@@ -133,20 +144,22 @@ function head() {
 auth.onAuthStateChanged(u => {
   if (!u) { location.href = 'index.html'; return; }
   user = u; isT = (u.email || '').toLowerCase() === TEACHER_EMAIL;
-  $('tPost').classList.toggle('hide', !isT); $('tGroups').classList.toggle('hide', !isT);
+  $('tPost').classList.toggle('hide', !isT);
+  $('tGroups').classList.toggle('hide', !isT);
   if (!isT) {
     const ref = db.collection('alunos').doc(u.uid);
-    ref.set({ name: nameOf(), email: u.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
-    ref.onSnapshot(s => { myGroup = (s.exists && s.data().grupo) || ''; head(); renderNotices(); });
+    ref.set({ name: nameOf(), email: u.email || '', seen: Date.now() }, { merge: true }).catch(dbErr);
+    ref.onSnapshot(s => { myGroup = (s.exists && s.data().grupo) || ''; head(); renderNotices(); }, dbErr);
   } else {
     db.collection('alunos').onSnapshot(s => {
       students = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       renderGroups(); fillTargets();
-    });
+    }, dbErr);
   }
   db.collection('avisos').orderBy('t', 'desc').limit(50).onSnapshot(s => {
-    notices = s.docs.map(d => ({ id: d.id, ...d.data() })); renderNotices();
-  });
+    notices = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderNotices();
+  }, dbErr);
   applyLang();
 });
 
@@ -165,27 +178,50 @@ function renderNotices() {
       (!isT && n.t > seenAtLoad ? '<span class="new">' + t('newb') + '</span>' : '') + '</div>';
     if (isT) {
       const b = document.createElement('button'); b.className = 'd'; b.textContent = t('del'); b.style.marginTop = '8px';
-      b.onclick = () => { if (confirm(t('confirm'))) db.collection('avisos').doc(n.id).delete(); };
+      b.onclick = () => { if (confirm(t('confirm'))) db.collection('avisos').doc(n.id).delete().catch(dbErr); };
       el.appendChild(b);
     }
     box.appendChild(el);
   });
-  if (!isT) { try { localStorage.setItem('avisosSeen', String(Math.max(seenAtLoad, ...list.map(n => n.t)))); } catch (e) {} }
+  if (!isT) {
+    try { localStorage.setItem('avisosSeen', String(Math.max(seenAtLoad, ...list.map(n => n.t)))); } catch (e) {}
+  }
 }
 
- apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
-
-  authDomain: "school-of-communicators.firebaseapp.com",
-
-  projectId: "school-of-communicators",
-
-  storageBucket: "school-of-communicators.firebasestorage.app",
-
-  messagingSenderId: "601098815550",
-
-  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
-
-  measurementId: "G-45TQ4JWK8V"
+// ---- teacher: post notices + assign groups ----
+const groupNames = () => [...new Set(students.map(s => (s.grupo || '').trim()).filter(Boolean))].sort();
+function fillTargets() {
+  if (!isT) return;
+  const sel = $('nTarget'), cur = sel.value;
+  sel.innerHTML = '<option value="all">' + t('all') + '</option>' +
+    groupNames().map(g => '<option value="' + esc(g) + '">' + t('toGroup') + esc(g) + '</option>').join('');
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : 'all';
+  $('gl').innerHTML = groupNames().map(g => '<option value="' + esc(g) + '">').join('');
+}
+function renderGroups() {
+  if (!isT) return;
+  const box = $('stuList');
+  if (!students.length) { box.textContent = t('noStu'); return; }
+  box.innerHTML = '';
+  students.forEach(s => {
+    const row = document.createElement('div'); row.className = 'stu';
+    row.innerHTML = '<span>' + esc(s.name || s.email || '') + '</span>';
+    const inp = document.createElement('input');
+    inp.setAttribute('list', 'gl'); inp.placeholder = t('groupPh'); inp.value = s.grupo || '';
+    inp.onchange = () => db.collection('alunos').doc(s.uid)
+      .update({ grupo: inp.value.trim() || firebase.firestore.FieldValue.delete() }).catch(dbErr);
+    row.appendChild(inp); box.appendChild(row);
+  });
+}
+$('nSend').onclick = async () => {
+  const title = $('nTitle').value.trim(), text = $('nText').value.trim();
+  if (!title && !text) return;
+  const btn = $('nSend'); btn.disabled = true;
+  try {
+    await db.collection('avisos').add({ title, text, target: $('nTarget').value, t: Date.now() });
+    $('nTitle').value = ''; $('nText').value = '';
+  } catch (e) { dbErr(e); }
+  btn.disabled = false;
 };
 applyLang();
 </script>

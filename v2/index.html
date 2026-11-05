@@ -12,7 +12,7 @@
 <header>
   <h1>MACRO TEST PLATFORM</h1>
   <p>Knowledge assessment system</p>
-    <a href="home.html" style="color:#fff;font-size:14px;display:inline-block;margin-top:8px">← Home</a>
+    <a id="homeLink" class="hidden" href="home.html" style="color:#fff;font-size:14px">← Home</a>
 </header>
 
 <div class="container">
@@ -246,7 +246,14 @@
 <script src="review.js"></script>
 <script src="results.js"></script>
 <script src="features.js"></script>
-<script src="dashboard.js"></script>
+
 <script src="main.js"></script>
+  <script>
+setInterval(function () {
+  var l = document.getElementById("homeLink");
+  if (!l || typeof S === "undefined") return;
+  l.classList.toggle("hidden", !S.session || S.active);
+}, 500);
+</script>
 </body>
 </html>

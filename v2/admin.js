@@ -6,11 +6,6 @@ const LEVEL_KEYS = Object.keys(LEVELS);
 const levelSelect = (cls, attr, value) =>
   `<select class="${cls}" ${attr}>${LEVEL_KEYS.map(k => `<option value="${k}" ${k === value ? "selected" : ""}>${LEVELS[k]}</option>`).join("")}</select>`;
 
-const DEFAULT_TOPICS = [
-  "Present simple", "Present continuous", "Past simple", "Future", "Verbs",
-  "Vocabulary", "Prepositions", "Articles", "Reading", "Listening", "Pronunciation", "Writing"
-];
-
 function adminMsg(text, ok = false) {
   const el = $("adminMsg");
   el.textContent = text;
@@ -22,123 +17,118 @@ function switchTab(name) {
   ["questions", "students", "settings", "results"].forEach(t => show("tab-" + t, t === name));
 }
 
-/* ---- extra fields created by code: question topic + test names ---- */
-function ensureTopicField() {
-  if ($("qTopic")) return;
-  const q = $("questionText");
-  const wrap = document.createElement("div");
-  wrap.innerHTML =
-    `<label class="field" for="qTopic">Topic (title shown above the question)</label>` +
-    `<input id="qTopic" type="text" list="topicList" maxlength="60" autocomplete="off" placeholder="e.g. Present simple, Verbs, Vocabulary">` +
-    `<datalist id="topicList"></datalist>`;
-  q.parentNode.insertBefore(wrap, q);
-  fillTopicList();
-}
+/* ---- tests: a test = title + level + its own questions ---- */
+const testsList = () => Object.entries((S.settings && S.settings.tests) || {})
+  .map(([id, t]) => ({ id, ...t })).filter(t => t && t.title)
+  .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
-function fillTopicList() {
-  const list = $("topicList");
-  if (!list) return;
-  const used = S.admin.data ? S.admin.data.questions.map(q => (q.topic || "").trim()).filter(Boolean) : [];
-  const topics = [...new Set([...used, ...DEFAULT_TOPICS])];
-  list.innerHTML = topics.map(t => `<option value="${esc(t)}">`).join("");
-}
+const newDraft = () => ({ id: null, title: "", level: "basic", createdAt: null, questions: [], origIds: [] });
 
-function ensureNameFields() {
-  if ($("setName_basic")) return;
-  const btn = $("saveSettingsBtn");
+function ensureBuilder() {
+  if ($("tTitle")) return;
+  const head = document.createElement("div");
+  head.innerHTML =
+    `<h3>Create a test</h3>` +
+    `<label class="field" for="tTitle">Test title (topic)</label>` +
+    `<input id="tTitle" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Verb to be">` +
+    `<label class="field" for="tLevel">Level (only students of this level can take it)</label>` +
+    levelSelect("", 'id="tLevel"', "basic") +
+    `<div id="draftBox"></div><hr>`;
+  $("formTitle").parentNode.insertBefore(head, $("formTitle"));
+
+  $("qLevel").style.display = "none";
+  const lab = document.querySelector('label[for="qLevel"]');
+  if (lab) lab.style.display = "none";
+
+  const row = $("saveQuestionBtn").parentNode;
   const box = document.createElement("div");
-  box.innerHTML = `<h4>Test names</h4>` + LEVEL_KEYS.map(k =>
-    `<label class="field" for="setName_${k}">${LEVELS[k]} test name</label>` +
-    `<input id="setName_${k}" type="text" maxlength="60" placeholder="e.g. ${LEVELS[k]} Test">`).join("");
-  btn.parentNode.insertBefore(box, btn);
-  btn.addEventListener("click", saveNames);
+  box.innerHTML =
+    `<div class="row" style="margin-top:14px"><button id="saveTestBtn">Save test</button>` +
+    `<button id="clearTestBtn" class="secondary">Start over</button></div>` +
+    `<p class="muted">Questions are only saved when you press Save test.</p>`;
+  row.parentNode.insertBefore(box, row.nextSibling);
+
+  $("saveTestBtn").onclick = saveTest;
+  $("clearTestBtn").onclick = clearDraft;
+  $("draftBox").addEventListener("click", draftClick);
+  $("questionList").addEventListener("click", testsClick);
+  $("tLevel").onchange = () => { S.admin.draft.level = $("tLevel").value; };
+  $("tTitle").oninput = () => { S.admin.draft.title = $("tTitle").value; };
+  const h = $("qCount").parentNode;
+  if (h.firstChild) h.firstChild.nodeValue = "Your tests ";
 }
 
-function fillNames() {
-  LEVEL_KEYS.forEach(k => {
-    const el = $("setName_" + k);
-    if (el) el.value = (S.settings.names && S.settings.names[k]) || "";
-  });
+function renderDraft() {
+  const d = S.admin.draft;
+  $("tTitle").value = d.title;
+  $("tLevel").value = d.level;
+  $("draftBox").innerHTML = `<h4>Questions in this test (${d.questions.length})</h4>` +
+    (d.questions.length ? d.questions.map((q, i) => `
+      <div class="question">
+        <strong>${i + 1}. ${esc(q.text)}</strong>
+        <span class="pill">${TYPE_LABEL[q.type || "mcq"]}</span>${q.hasAudio ? ' <span class="pill">has audio</span>' : ""}
+        ${q.type === "mcq" ? `<p>${q.options.map((o, j) =>
+          `${LETTERS[j]}: ${esc(o)}${j === q.correct ? " <span class='pill ok'>correct</span>" : ""}`).join("<br>")}</p>` : ""}
+        <div class="row" style="margin-top:8px">
+          <button class="secondary small" data-dedit="${i}">Edit</button>
+          <button class="danger small" data-ddel="${i}">Remove</button>
+        </div>
+      </div>`).join("") : "<p class='muted'>No questions yet. Add the first one below.</p>");
 }
 
-async function saveNames() {
-  const names = {};
-  LEVEL_KEYS.forEach(k => { const el = $("setName_" + k); names[k] = el ? el.value.trim() : ""; });
-  try {
-    await S.store.saveSettings({ names });
-    S.settings = { ...S.settings, names };
-  } catch (e) { adminMsg("Could not save the test names: " + e.message); }
-}
-
-async function showAdmin() {
-  show("view-admin");
-  adminMsg("");
-  ensureTopicField();
-  ensureNameFields();
-  S.admin.promptRec = mountRecorder($("promptRec"), {
-    removable: true,
-    onChange: url => { S.admin.promptAudio = url; }
-  });
-  try {
-    S.settings = await S.store.getSettings();
-    await S.store.saveSettings(S.settings); // makes sure the settings document exists
-    fillSettingsForm();
-    fillNames();
-    await refreshAdmin();
-    await syncQuestionCount();
-  } catch (e) {
-    adminMsg("Could not load data: " + e.message);
+function draftClick(e) {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.ddel !== undefined) {
+    S.admin.draft.questions.splice(Number(b.dataset.ddel), 1);
+    resetQuestionForm();
+    renderDraft();
   }
-  switchTab("questions");
+  if (b.dataset.dedit !== undefined) editDraftQuestion(Number(b.dataset.dedit));
 }
 
-async function refreshAdmin() {
-  S.admin.data = await S.store.loadAdminData();
-  S.admin.rows = computeRows(S.admin.data);
-  renderQuestionList();
-  renderStudents();
-  renderResults();
-  fillTopicList();
+function clearDraft() {
+  S.admin.draft = newDraft();
+  resetQuestionForm();
+  renderDraft();
 }
 
-/* ---- questions ---- */
+/* ---- the question form adds questions to the test being built ---- */
 function showTypeFields() { show("mcqFields", $("qType").value === "mcq"); }
 
 function resetQuestionForm() {
-  S.admin.editingId = null;
+  S.admin.editingIdx = null;
   S.admin.promptAudio = undefined;
   ["questionText", "optionA", "optionB", "optionC", "optionD"].forEach(id => { $(id).value = ""; });
-  if ($("qTopic")) $("qTopic").value = "";
   $("qType").value = "mcq";
   $("correct").value = "0";
   $("promptFile").value = "";
-  S.admin.promptRec.setUrl(null);
-  $("formTitle").textContent = "Add a question";
-  $("saveQuestionBtn").textContent = "Add question";
+  if (S.admin.promptRec) S.admin.promptRec.setUrl(null);
+  $("formTitle").textContent = "Add a question to this test";
+  $("saveQuestionBtn").textContent = "Add question to this test";
   show("cancelEditBtn", false);
   showTypeFields();
 }
 
-async function editQuestion(id) {
-  const q = S.admin.data.questions.find(x => x.id === id);
+async function editDraftQuestion(i) {
+  const q = S.admin.draft.questions[i];
   if (!q) return;
-  S.admin.editingId = id;
+  S.admin.editingIdx = i;
   S.admin.promptAudio = undefined;
   $("qType").value = q.type || "mcq";
-  $("qLevel").value = q.level || "basic";
-  if ($("qTopic")) $("qTopic").value = q.topic || "";
   $("questionText").value = q.text;
-  ["optionA", "optionB", "optionC", "optionD"].forEach((el, i) => { $(el).value = (q.options || [])[i] || ""; });
+  ["optionA", "optionB", "optionC", "optionD"].forEach((id, k) => { $(id).value = (q.options || [])[k] || ""; });
   $("correct").value = String(q.correct || 0);
   $("promptFile").value = "";
   S.admin.promptRec.setUrl(null);
   $("formTitle").textContent = "Edit question";
-  $("saveQuestionBtn").textContent = "Save changes";
+  $("saveQuestionBtn").textContent = "Update question";
   show("cancelEditBtn");
   showTypeFields();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  if (q.hasAudio) {
-    try { S.admin.promptRec.setUrl(await S.store.getQuestionAudio(id)); } catch { /* ignore */ }
+  $("formTitle").scrollIntoView({ behavior: "smooth" });
+  if (q.audio) S.admin.promptRec.setUrl(q.audio);
+  else if (q.hasAudio && q.id) {
+    try { S.admin.promptRec.setUrl(await S.store.getQuestionAudio(q.id)); } catch { /* ignore */ }
   }
 }
 
@@ -154,7 +144,7 @@ async function pickPromptFile() {
     const url = await blobToDataURL(f);
     S.admin.promptAudio = url;
     S.admin.promptRec.setUrl(url);
-    adminMsg("Audio file added. Press Add question to save.", true);
+    adminMsg("Audio file added. Press the button to add the question.", true);
   } catch (e) { adminMsg(e.message); }
 }
 
@@ -167,10 +157,9 @@ async function confirmIfStarted(action) {
   });
 }
 
-async function saveQuestionForm() {
+/* adds (or updates) a question inside the test being built; nothing is saved to the server yet */
+function saveQuestionForm() {
   const type = $("qType").value;
-  const level = $("qLevel").value;
-  const topic = $("qTopic") ? $("qTopic").value.trim() : "";
   const text = $("questionText").value.trim();
   const options = type === "mcq" ? ["optionA", "optionB", "optionC", "optionD"].map(id => $(id).value.trim()) : [];
   const correct = Number($("correct").value);
@@ -181,28 +170,112 @@ async function saveQuestionForm() {
     if (new Set(options.map(o => o.toLowerCase())).size < 4) { adminMsg("The four options must be different."); return; }
   }
 
-  const editing = S.admin.editingId;
-  if (editing && !(await confirmIfStarted("Editing this question"))) return;
+  const d = S.admin.draft, idx = S.admin.editingIdx;
+  const old = idx !== null && idx !== undefined ? d.questions[idx] : null;
+  const sel = S.admin.promptAudio;
+  let audio = old ? old.audio : undefined;
+  let hasAudio = old ? !!old.hasAudio : false;
+  if (sel !== undefined) { audio = sel; hasAudio = !!sel; }
 
-  const existing = S.admin.data.questions.find(q => q.id === editing);
-  const audio = S.admin.promptAudio;
-  const hasAudio = audio === undefined ? !!(existing && existing.hasAudio) : !!audio;
-  $("saveQuestionBtn").disabled = true;
+  const item = {
+    id: old ? old.id : newId(), type, text, options, correct, hasAudio, audio,
+    createdAt: old ? old.createdAt : null
+  };
+  if (old) d.questions[idx] = item; else d.questions.push(item);
+  resetQuestionForm();
+  renderDraft();
+  adminMsg(old ? "Question updated." : "Question added to the test. Press Save test when it is complete.", true);
+}
+
+async function saveTest() {
+  const d = S.admin.draft;
+  d.title = $("tTitle").value.trim();
+  d.level = $("tLevel").value;
+  if (d.title.length < 2) { adminMsg("Give the test a title."); return; }
+  if (!d.questions.length) { adminMsg("Add at least one question."); return; }
+  if (d.id && !(await confirmIfStarted("Editing this test"))) return;
+
+  const id = d.id || newId();
+  $("saveTestBtn").disabled = true;
   try {
-    await S.store.saveQuestion({
-      id: editing || newId(), type, level, topic, text, options, hasAudio,
-      ...(type === "mcq" ? { correct } : {}),
-      createdAt: existing ? existing.createdAt : Date.now()
-    }, audio);
-    resetQuestionForm();
+    const base = Date.now();
+    for (let i = 0; i < d.questions.length; i++) {
+      const q = d.questions[i];
+      await S.store.saveQuestion({
+        id: q.id, type: q.type, level: d.level, topic: d.title, testId: id,
+        text: q.text, options: q.options, hasAudio: q.hasAudio,
+        ...(q.type === "mcq" ? { correct: q.correct } : {}),
+        createdAt: q.createdAt || (base + i)
+      }, q.audio);
+    }
+    const keep = new Set(d.questions.map(q => q.id));
+    for (const oid of d.origIds) if (!keep.has(oid)) await S.store.deleteQuestion(oid);
+    await S.store.saveTest({ id, title: d.title, level: d.level, createdAt: d.createdAt || Date.now() });
+    S.settings = await S.store.getSettings();
+    clearDraft();
     await refreshAdmin();
     await syncQuestionCount();
-    adminMsg(editing ? "Question updated." : "Question added.", true);
+    adminMsg("Test saved.", true);
   } catch (e) {
-    adminMsg("Could not save the question: " + e.message);
+    adminMsg("Could not save the test: " + e.message);
   } finally {
-    $("saveQuestionBtn").disabled = false;
+    $("saveTestBtn").disabled = false;
   }
+}
+
+async function testsClick(e) {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.tedit) {
+    const t = testsList().find(x => x.id === b.dataset.tedit);
+    if (!t) return;
+    const mine = S.admin.data.questions.filter(q => q.testId === t.id);
+    S.admin.draft = {
+      id: t.id, title: t.title, level: t.level, createdAt: t.createdAt, origIds: mine.map(q => q.id),
+      questions: mine.map(q => ({
+        id: q.id, type: q.type || "mcq", text: q.text, options: q.options || [], correct: q.correct,
+        hasAudio: !!q.hasAudio, audio: undefined, createdAt: q.createdAt
+      }))
+    };
+    resetQuestionForm();
+    renderDraft();
+    $("tTitle").scrollIntoView({ behavior: "smooth" });
+    adminMsg('Editing "' + t.title + '". Press Save test when you finish.', true);
+  }
+  if (b.dataset.tdel) {
+    const t = testsList().find(x => x.id === b.dataset.tdel);
+    if (!t) return;
+    const ok = await ask({
+      title: "Delete this test?",
+      body: "The test and all its questions will be deleted. Students using it will be locked.",
+      ok: "Delete", cancel: "Cancel"
+    });
+    if (!ok) return;
+    try {
+      for (const q of S.admin.data.questions.filter(x => x.testId === t.id)) await S.store.deleteQuestion(q.id);
+      for (const m of S.admin.data.members.filter(x => x.testId === t.id)) {
+        await S.store.updateMember(m.uid, { testId: "", topic: "", released: false });
+      }
+      await S.store.deleteTest(t.id);
+      S.settings = await S.store.getSettings();
+      if (S.admin.draft.id === t.id) clearDraft();
+      await refreshAdmin();
+      await syncQuestionCount();
+      adminMsg("Test deleted.", true);
+    } catch (err) { adminMsg("Could not delete: " + err.message); }
+  }
+}
+
+function editQuestion() { /* questions are edited inside their test */ }
+
+async function removeQuestion(id) {
+  if (!(await ask({ title: "Delete this question?", body: "This cannot be undone.", ok: "Delete", cancel: "Cancel" }))) return;
+  try {
+    await S.store.deleteQuestion(id);
+    await refreshAdmin();
+    await syncQuestionCount();
+    adminMsg("Question deleted.", true);
+  } catch (e) { adminMsg("Could not delete: " + e.message); }
 }
 
 async function syncQuestionCount() {
@@ -214,42 +287,54 @@ async function syncQuestionCount() {
   }
 }
 
-async function removeQuestion(id) {
-  if (!(await ask({ title: "Delete this question?", body: "This cannot be undone.", ok: "Delete", cancel: "Cancel" }))) return;
-  if (!(await confirmIfStarted("Deleting this question"))) return;
-  try {
-    await S.store.deleteQuestion(id);
-    if (S.admin.editingId === id) resetQuestionForm();
-    await refreshAdmin();
-    await syncQuestionCount();
-    adminMsg("Question deleted.", true);
-  } catch (e) { adminMsg("Could not delete: " + e.message); }
-}
-
-function questionItem(q, i) {
-  return `
-    <div class="question">
-      <strong>${i + 1}. ${esc(q.text)}</strong>
-      <span class="pill">${TYPE_LABEL[q.type || "mcq"]}</span>${q.topic ? ` <span class="pill">${esc(q.topic)}</span>` : ""}${q.hasAudio ? ' <span class="pill">has audio</span>' : ""}
-      ${q.type === "mcq" || !q.type ? `<p>${q.options.map((o, j) =>
-        `${LETTERS[j]}: ${esc(o)}${j === q.correct ? " <span class='pill ok'>correct</span>" : ""}`).join("<br>")}</p>` : ""}
-      <div class="row" style="margin-top:8px">
-        <button class="secondary small" data-edit="${esc(q.id)}">Edit</button>
-        <button class="danger small" data-delete="${esc(q.id)}">Delete</button>
-      </div>
-    </div>`;
-}
-
 function renderQuestionList() {
   const qs = S.admin.data.questions;
-  $("qCount").textContent = qs.length ? `(${qs.length})` : "";
-  const groups = { ...LEVELS, none: "No level (old questions: edit or delete)" };
-  $("questionList").innerHTML = qs.length ? Object.keys(groups).map(k => {
-    const list = qs.filter(q => (q.level || "none") === k);
-    if (k === "none" && !list.length) return "";
-    return `<h4>${groups[k]} (${list.length})</h4>` +
-      (list.length ? list.map(questionItem).join("") : "<p class='muted'>No questions for this level yet.</p>");
-  }).join("") : "<p>No questions yet. Add the first one above.</p>";
+  const tests = testsList();
+  $("qCount").textContent = tests.length ? `(${tests.length})` : "";
+  const html = tests.map(t => {
+    const n = qs.filter(q => q.testId === t.id).length;
+    return `<div class="question">
+      <strong>${esc(t.title)}</strong> <span class="pill">${LEVELS[t.level] || esc(t.level)}</span> <span class="pill">${n} question(s)</span>
+      <div class="row" style="margin-top:8px">
+        <button class="secondary small" data-tedit="${esc(t.id)}">Edit</button>
+        <button class="danger small" data-tdel="${esc(t.id)}">Delete</button>
+      </div></div>`;
+  }).join("");
+  const orphans = qs.filter(q => !q.testId);
+  const oldHtml = orphans.length ? `<h4>Old question bank (${orphans.length})</h4>
+    <p class="muted">Questions from before tests existed. A student set to "Old question bank" gets all of them for the level.</p>` +
+    orphans.map(q => `<div class="question"><strong>${esc(q.text)}</strong> <span class="pill">${LEVELS[q.level] || "No level"}</span>
+      <div class="row" style="margin-top:8px"><button class="danger small" data-delete="${esc(q.id)}">Delete</button></div></div>`).join("") : "";
+  $("questionList").innerHTML = (html || "<p>No tests yet. Create the first one above.</p>") + oldHtml;
+}
+
+async function showAdmin() {
+  show("view-admin");
+  adminMsg("");
+  ensureBuilder();
+  S.admin.promptRec = mountRecorder($("promptRec"), {
+    removable: true,
+    onChange: url => { S.admin.promptAudio = url; }
+  });
+  try {
+    S.settings = await S.store.getSettings();
+    await S.store.saveSettings(S.settings); // makes sure the settings document exists
+    fillSettingsForm();
+    await refreshAdmin();
+    await syncQuestionCount();
+  } catch (e) {
+    adminMsg("Could not load data: " + e.message);
+  }
+  clearDraft();
+  switchTab("questions");
+}
+
+async function refreshAdmin() {
+  S.admin.data = await S.store.loadAdminData();
+  S.admin.rows = computeRows(S.admin.data);
+  renderQuestionList();
+  renderStudents();
+  renderResults();
 }
 
 /* ---- settings ---- */

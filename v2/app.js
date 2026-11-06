@@ -123,6 +123,7 @@ async function showStudent() {
         <li>You can take the test only once.</li>
       </ul>`;
     show("startBtn");
+     
   } catch (e) {
     $("introBody").innerHTML = "";
     $("studentStatus").textContent = "Could not load your data: " + e.message;

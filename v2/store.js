@@ -37,7 +37,7 @@ async function createFirebaseStore(cfg) {
   async function sessionOf(u) {
     if (u.email === ADMIN_EMAIL) return { uid: u.uid, email: u.email, username: "Teacher", role: "admin" };
     const m = await one("members", u.uid);
-    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", released: m.released === true, role: "student" } : null;
+    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", released: m.released === true, topic: m.topic || "", role: "student" } : null;
   }
 
   return {
@@ -66,6 +66,7 @@ async function createFirebaseStore(cfg) {
     setStudentLevel: (uid, level) => F.updateDoc(ref("members", uid), { level }),
     setStudentRelease: (uid, released) => F.updateDoc(ref("members", uid), { released }),
     setStudentName: (uid, name) => F.updateDoc(ref("members", uid), { name }),
+    updateMember: (uid, patch) => F.updateDoc(ref("members", uid), patch),
     removeStudent: uid => F.deleteDoc(ref("members", uid)),
     async loginStudent({ email, password }) {
       let user;
@@ -150,9 +151,15 @@ async function createFirebaseStore(cfg) {
     },
     saveGrades: (uid, marks) => F.setDoc(ref("grades", uid), { uid, marks }),
     async publishResults(list) {
+      /* the topic, certificate type and level chosen for each student are saved inside the result */
+      const meta = {};
+      for (const r of list) {
+        const m = await one("members", r.uid);
+        meta[r.uid] = m ? { topic: m.topic || "", certType: m.certType || "achievement", level: m.level || "basic" } : {};
+      }
       for (let i = 0; i < list.length; i += 400) {
         const b = F.writeBatch(db);
-        list.slice(i, i + 400).forEach(r => b.set(ref("results", r.uid), r));
+        list.slice(i, i + 400).forEach(r => b.set(ref("results", r.uid), { ...r, ...meta[r.uid] }));
         await b.commit();
       }
     },
@@ -165,8 +172,10 @@ async function createFirebaseStore(cfg) {
         if (d) audios.push([qid, d.data]);
       }
       for (const [qid, data] of audios) await F.setDoc(ref("history_audio", hid + "_" + qid), { hid, uid, qid, data });
+      const res = await one("results", uid);
+      const extra = res ? { topic: res.topic || "", certType: res.certType || "achievement", level: res.level || record.level || "basic" } : {};
       const b = F.writeBatch(db);
-      b.set(ref("history", hid), { ...record, uid, archivedAt: Date.now() });
+      b.set(ref("history", hid), { ...record, ...extra, uid, archivedAt: Date.now() });
       b.set(ref("history_detail", hid), { uid, ...detail });
       ["attempts", "submissions", "results", "grades"].forEach(c => b.delete(ref(c, uid)));
       audios.forEach(([qid]) => b.delete(ref("answers_audio", uid + "_" + qid)));

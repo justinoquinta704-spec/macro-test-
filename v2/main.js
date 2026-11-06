@@ -4,11 +4,11 @@ function renderStudents() {
   $("stuCount").textContent = ms.length ? `(${ms.length})` : "";
   $("studentList").innerHTML = ms.length ? `
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Level</th> <th></th></tr></thead><th>Test</th>
+      <thead><tr><th>Full name</th><th>Email</th><th>Level</th><th>Test</th><th></th></tr></thead>
       <tbody>${ms.map(m => `<tr>
-        <td>${esc(m.name)}</td><td>${esc(m.email)}</td>
+        <td><input type="text" data-name-uid="${esc(m.uid)}" value="${esc(m.name)}" style="min-width:170px;margin:0"></td><td>${esc(m.email)}</td>
         <td>${levelSelect("grade", `data-setlevel="${esc(m.uid)}"`, m.level || "basic")}</td>
-                <td><button class="${m.released ? "" : "secondary "}small" data-release="${esc(m.uid)}">${m.released ? "Released" : "Locked"}</button></td>
+        <td><button class="${m.released ? "" : "secondary "}small" data-release="${esc(m.uid)}">${m.released ? "Released" : "Locked"}</button></td>
         <td><div class="row">
           <button class="secondary small" data-reset-pw="${esc(m.email)}">Send reset email</button>
           <button class="danger small" data-remove="${esc(m.uid)}">Remove access</button>
@@ -136,7 +136,7 @@ async function boot() {
   catch (e) { await route(null); $("loginMsg").textContent = e.message; }
 }
 
-boot();
+/* release / lock a student's test */
 $("studentList").addEventListener("click", async e => {
   const b = e.target.closest("button");
   if (!b || !b.dataset.release) return;
@@ -148,3 +148,15 @@ $("studentList").addEventListener("click", async e => {
     adminMsg(m && m.released ? "Test locked." : "Test released.", true);
   } catch (err) { adminMsg("Could not change: " + err.message); }
 });
+
+/* edit a student's full name */
+$("studentList").addEventListener("change", async e => {
+  const uid = e.target.dataset.nameUid;
+  if (!uid) return;
+  const name = e.target.value.trim();
+  if (name.length < 2) { adminMsg("Enter the student's full name."); return; }
+  try { await S.store.setStudentName(uid, name); await refreshAdmin(); adminMsg("Name updated.", true); }
+  catch (err) { adminMsg("Could not change the name: " + err.message); }
+});
+
+boot();

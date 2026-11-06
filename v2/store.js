@@ -65,6 +65,7 @@ async function createFirebaseStore(cfg) {
     },
     setStudentLevel: (uid, level) => F.updateDoc(ref("members", uid), { level }),
     setStudentRelease: (uid, released) => F.updateDoc(ref("members", uid), { released }),
+    setStudentName: (uid, name) => F.updateDoc(ref("members", uid), { name }),
     removeStudent: uid => F.deleteDoc(ref("members", uid)),
     async loginStudent({ email, password }) {
       let user;

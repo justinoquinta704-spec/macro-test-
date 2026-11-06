@@ -1,18 +1,23 @@
 /* ---- students (accounts are created by the teacher) ---- */
-const TOPIC_SUGGESTIONS = ["Verb to be", "Present simple", "Present continuous", "Past simple", "Future", "Verbs", "Vocabulary", "Prepositions", "Articles", "Pronunciation"];
 const CERT_TYPES = { achievement: "Achievement (test)", class: "Class", level: "Level completion", course: "Course completion", none: "No certificate" };
+const testsForLevel = level => Object.entries((S.settings && S.settings.tests) || {})
+  .map(([id, t]) => ({ id, ...t })).filter(t => t.title && t.level === level)
+  .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
 function renderStudents() {
   const ms = [...S.admin.data.members].sort((a, b) => a.name.localeCompare(b.name));
   $("stuCount").textContent = ms.length ? `(${ms.length})` : "";
   $("studentList").innerHTML = ms.length ? `
-    <datalist id="topicSug">${TOPIC_SUGGESTIONS.map(t => `<option value="${esc(t)}">`).join("")}</datalist>
     <table>
-      <thead><tr><th>Full name</th><th>Email</th><th>Level</th><th>Topic</th><th>Certificate</th><th>Test</th><th></th></tr></thead>
+      <thead><tr><th>Full name</th><th>Email</th><th>Level</th><th>Test</th><th>Certificate</th><th>Access</th><th></th></tr></thead>
       <tbody>${ms.map(m => `<tr>
         <td><input type="text" data-name-uid="${esc(m.uid)}" value="${esc(m.name)}" style="min-width:170px;margin:0"></td><td>${esc(m.email)}</td>
         <td>${levelSelect("grade", `data-setlevel="${esc(m.uid)}"`, m.level || "basic")}</td>
-        <td><input type="text" list="topicSug" data-topic-uid="${esc(m.uid)}" value="${esc(m.topic || "")}" placeholder="e.g. Verb to be" style="min-width:150px;margin:0"></td>
+        <td><select data-test-uid="${esc(m.uid)}" style="margin:0;min-width:150px">
+          <option value="">Choose a test…</option>
+          ${testsForLevel(m.level || "basic").map(t => `<option value="${esc(t.id)}" ${t.id === m.testId ? "selected" : ""}>${esc(t.title)}</option>`).join("")}
+          <option value="__all__" ${m.testId === "__all__" ? "selected" : ""}>Old question bank</option>
+        </select></td>
         <td><select data-cert-uid="${esc(m.uid)}" style="margin:0">${Object.keys(CERT_TYPES).map(k => `<option value="${k}" ${k === (m.certType || "achievement") ? "selected" : ""}>${CERT_TYPES[k]}</option>`).join("")}</select></td>
         <td><button class="${m.released ? "" : "secondary "}small" data-release="${esc(m.uid)}">${m.released ? "Released" : "Locked"}</button></td>
         <td><div class="row">
@@ -103,8 +108,11 @@ function bindEvents() {
   $("studentList").addEventListener("change", async e => {
     const uid = e.target.dataset.setlevel;
     if (!uid) return;
-    try { await S.store.setStudentLevel(uid, e.target.value); await refreshAdmin(); adminMsg("Level updated.", true); }
-    catch (err) { adminMsg("Could not change the level: " + err.message); }
+    try {
+      await S.store.updateMember(uid, { level: e.target.value, testId: "", topic: "", released: false });
+      await refreshAdmin();
+      adminMsg("Level updated. Choose a test for this student and release it again.", true);
+    } catch (err) { adminMsg("Could not change the level: " + err.message); }
   });
   $("lvlFilter").onchange = () => { S.admin.filter = $("lvlFilter").value; renderResults(); };
   $("studentList").addEventListener("click", e => {
@@ -142,12 +150,13 @@ async function boot() {
   catch (e) { await route(null); $("loginMsg").textContent = e.message; }
 }
 
-/* release / lock a student's test */
+/* release / lock a student's test (a test must be chosen first) */
 $("studentList").addEventListener("click", async e => {
   const b = e.target.closest("button");
   if (!b || !b.dataset.release) return;
   const uid = b.dataset.release;
   const m = S.admin.data.members.find(x => x.uid === uid);
+  if (m && !m.released && !m.testId) { adminMsg("Choose a test for this student first."); return; }
   try {
     await S.store.setStudentRelease(uid, !(m && m.released));
     await refreshAdmin();
@@ -155,7 +164,7 @@ $("studentList").addEventListener("click", async e => {
   } catch (err) { adminMsg("Could not change: " + err.message); }
 });
 
-/* edit a student's full name, topic and certificate type */
+/* edit a student's full name, test and certificate type */
 $("studentList").addEventListener("change", async e => {
   const t = e.target;
   try {
@@ -164,9 +173,10 @@ $("studentList").addEventListener("change", async e => {
       if (name.length < 2) { adminMsg("Enter the student's full name."); return; }
       await S.store.setStudentName(t.dataset.nameUid, name);
       await refreshAdmin(); adminMsg("Name updated.", true);
-    } else if (t.dataset.topicUid) {
-      await S.store.updateMember(t.dataset.topicUid, { topic: t.value.trim() });
-      await refreshAdmin(); adminMsg("Topic saved.", true);
+    } else if (t.dataset.testUid) {
+      const test = ((S.settings && S.settings.tests) || {})[t.value];
+      await S.store.updateMember(t.dataset.testUid, { testId: t.value, topic: test ? test.title : "" });
+      await refreshAdmin(); adminMsg("Test chosen. Press Locked to release it.", true);
     } else if (t.dataset.certUid) {
       await S.store.updateMember(t.dataset.certUid, { certType: t.value });
       await refreshAdmin(); adminMsg("Certificate type saved.", true);

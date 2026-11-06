@@ -5,60 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Certificate · School of Communicators</title>
 <style>
-@page { size: A4 landscape; margin: 0; }
 * { box-sizing: border-box; }
-body { margin: 0; background: #eef2f8; font-family: Georgia, "Times New Roman", serif; color: #0b2a5b; }
-.bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; font-family: system-ui, sans-serif; }
+body { margin: 0; background: #eef2f8; font-family: system-ui, sans-serif; color: #0b2a5b; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; }
 .bar button { background: #143d78; color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 15px; }
 .bar button.s { background: #e8f0fe; color: #0b2a5b; }
-#msg { padding: 0 12px; font-family: system-ui, sans-serif; color: #b42318; }
-#stage { width: 100%; padding: 0 12px 24px; }
-#cert { width: 1000px; height: 707px; margin: 0 auto; background: #fff; border: 8px solid #0b2a5b; padding: 18px; transform-origin: top left; }
-#inner { height: 100%; border: 2px solid #143d78; text-align: center; padding: 48px 70px; display: flex; flex-direction: column; align-items: center; }
-.brand { font-family: system-ui, sans-serif; letter-spacing: 6px; font-size: 16px; color: #143d78; }
-.title { font-size: 50px; margin: 26px 0 6px; font-weight: 700; }
-.line { width: 90px; height: 3px; background: #143d78; margin: 10px 0 24px; }
-.small { font-family: system-ui, sans-serif; font-size: 18px; color: #5b6785; }
-.name { font-size: 54px; margin: 14px 0 10px; font-style: italic; }
-.test { font-size: 34px; margin: 10px 0 6px; font-weight: 700; }
-.score { font-family: system-ui, sans-serif; font-size: 20px; color: #143d78; }
-.foot { margin-top: auto; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: system-ui, sans-serif; font-size: 16px; color: #5b6785; }
-.foot div { width: 260px; border-top: 1.5px solid #0b2a5b; padding-top: 8px; }
-@media print {
-  .noprint { display: none !important; }
-  body { background: #fff; }
-  #stage { padding: 0; height: auto !important; }
-  #cert { transform: none !important; }
-}
+#msg { padding: 0 12px; color: #b42318; }
+#note { padding: 0 12px 8px; color: #5b6785; font-size: 14px; }
+#wrap { padding: 0 12px 24px; display: none; }
+#cv { width: 100%; height: auto; display: block; background: #fff; box-shadow: 0 2px 10px #0003; }
 </style>
 </head>
 <body>
 
-<div class="bar noprint">
+<div class="bar">
   <button class="s" onclick="location.href='dashboard.html'">Back</button>
-  <button id="printBtn">Print / Save as PDF</button>
+  <button id="pdfBtn">Download PDF</button>
+  <button id="imgBtn" class="s">Download image</button>
 </div>
-<p id="msg" class="noprint"></p>
+<p id="msg"></p>
+<p id="note">To print: download the PDF, open it and print it from the PDF viewer (A4, landscape).</p>
+<div id="wrap"><canvas id="cv" width="3508" height="2480"></canvas></div>
 
-<div id="stage">
-  <div id="cert" class="hide">
-    <div id="inner">
-      <div class="brand">SCHOOL OF COMMUNICATORS</div>
-      <div class="title">Certificate of Achievement</div>
-      <div class="line"></div>
-      <div class="small">This certifies that</div>
-      <div class="name" id="cName"></div>
-      <div class="small">has successfully passed</div>
-      <div class="test" id="cTest"></div>
-      <div class="score" id="cScore"></div>
-      <div class="foot">
-        <div id="cDate"></div>
-        <div>Authorized signature</div>
-      </div>
-    </div>
-  </div>
-</div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="core.js"></script>
 <script src="audio.js"></script>
 <script src="store.js"></script>
@@ -70,20 +39,100 @@ body { margin: 0; background: #eef2f8; font-family: Georgia, "Times New Roman", 
 <script src="features.js"></script>
 <script src="dashboard.js"></script>
 <script>
-const cert = document.getElementById("cert"), stage = document.getElementById("stage");
-function fit() {
-  const s = Math.min(1, (stage.clientWidth - 24) / 1000);
-  cert.style.transform = "scale(" + s + ")";
-  stage.style.height = (707 * s + 24) + "px";
+const SIGNER = "Justino João Quinta";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const NAVY = "#0b2a5b", BLUE = "#143d78", GREY = "#5b6785";
+const SERIF = 'Georgia, "Times New Roman", "Noto Serif", serif';
+const SANS = 'system-ui, "Segoe UI", Roboto, Arial, sans-serif';
+let NAME = "";
+
+function fitSize(t, maxW, px, weight, style, family) {
+  let s = px;
+  while (s > 40) {
+    ctx.font = style + " " + weight + " " + s + "px " + family;
+    if (ctx.measureText(t).width <= maxW) break;
+    s -= 4;
+  }
+  return s;
 }
-window.addEventListener("resize", fit);
-window.addEventListener("beforeprint", () => { cert.style.transform = "none"; stage.style.height = "auto"; });
-window.addEventListener("afterprint", fit);
-document.getElementById("printBtn").onclick = () => window.print();
+function put(t, x, y, px, o) {
+  o = o || {};
+  ctx.font = (o.style || "normal") + " " + (o.weight || "normal") + " " + px + "px " + (o.family || SANS);
+  ctx.fillStyle = o.color || NAVY; ctx.textAlign = o.align || "center"; ctx.textBaseline = "alphabetic";
+  ctx.fillText(t, x, y);
+}
+function spaced(t, x, y, px, gap, color) {
+  ctx.font = "normal 600 " + px + "px " + SANS;
+  const ws = [...t].map(c => ctx.measureText(c).width);
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (ws.length - 1);
+  let cx = x - total / 2;
+  ctx.fillStyle = color; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  [...t].forEach((c, i) => { ctx.fillText(c, cx, y); cx += ws[i] + gap; });
+}
+function fitted(t, x, y, maxW, px, weight, style, family, color) {
+  const s = fitSize(t, maxW, px, weight, style, family);
+  put(t, x, y, s, { weight, style, family, color });
+}
+
+function content(e, n) {
+  const type = e.certType || "achievement";
+  const topic = (e.topic || "").trim();
+  const score = "with a score of " + e.pct + "%";
+  if (type === "class") return { title: "Certificate of Class Completion", intro: "has successfully completed the class", subject: topic || "English Class", extra: score };
+  if (type === "level") return { title: "Certificate of Level Completion", intro: "has successfully completed the", subject: (LEVELS[e.level] || "English") + " Level", extra: "of the English course, " + score };
+  if (type === "course") return { title: "Certificate of Course Completion", intro: "has successfully completed the", subject: "English Course", extra: "at School of Communicators" };
+  return { title: "Certificate of Achievement", intro: topic ? "has successfully passed the test on" : "has successfully passed", subject: topic || ("English Test " + n), extra: score };
+}
+
+function draw(name, c, dateText) {
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  // frames
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 28; ctx.strokeRect(80, 80, W - 160, H - 160);
+  ctx.strokeStyle = BLUE; ctx.lineWidth = 6; ctx.strokeRect(150, 150, W - 300, H - 300);
+  ctx.fillStyle = BLUE;
+  [[150, 150], [W - 150, 150], [150, H - 150], [W - 150, H - 150]].forEach(p => ctx.fillRect(p[0] - 22, p[1] - 22, 44, 44));
+
+  spaced("SCHOOL OF COMMUNICATORS", W / 2, 400, 58, 16, BLUE);
+  fitted(c.title, W / 2, 690, 2800, 210, "bold", "normal", SERIF, NAVY);
+  ctx.fillStyle = BLUE; ctx.fillRect(W / 2 - 200, 780, 400, 10);
+
+  put("This certifies that", W / 2, 990, 68, { color: GREY });
+  fitted(name, W / 2, 1270, 2700, 230, "normal", "italic", SERIF, NAVY);
+  ctx.fillStyle = "#c9d3e6"; ctx.fillRect(W / 2 - 1150, 1345, 2300, 4);
+
+  put(c.intro, W / 2, 1510, 68, { color: GREY });
+  fitted(c.subject, W / 2, 1770, 2800, 150, "bold", "normal", SERIF, NAVY);
+  put(c.extra, W / 2, 1945, 76, { color: BLUE });
+
+  // footer: date (left), seal (centre), signer (right)
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(420, 2120, 800, 5); ctx.fillRect(W - 1220, 2120, 800, 5);
+  put(dateText, 820, 2200, 62, { weight: "bold" });
+  put("Date", 820, 2275, 44, { color: GREY });
+  put(SIGNER, W - 820, 2200, 62, { weight: "bold" });
+  put("Authorized signature", W - 820, 2275, 44, { color: GREY });
+
+  ctx.strokeStyle = BLUE; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.arc(W / 2, 2150, 120, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(W / 2, 2150, 100, 0, Math.PI * 2); ctx.stroke();
+  put("SC", W / 2, 2182, 90, { weight: "bold", family: SERIF, color: BLUE });
+}
+
+const base = () => "Certificate - " + NAME.replace(/[\\/:*?"<>|]+/g, "").trim();
+document.getElementById("pdfBtn").onclick = () => {
+  if (!window.jspdf) { document.getElementById("msg").textContent = "The PDF tool did not load. Check your connection."; return; }
+  const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 297, 210);
+  pdf.save(base() + ".pdf");
+};
+document.getElementById("imgBtn").onclick = () => {
+  const a = document.createElement("a");
+  a.href = cv.toDataURL("image/png"); a.download = base() + ".png"; a.click();
+};
 
 (async function () {
   const msg = document.getElementById("msg");
-  cert.style.display = "none";
   try {
     S.store = await createFirebaseStore(FIREBASE_CONFIG);
     const session = await S.store.init();
@@ -93,13 +142,11 @@ document.getElementById("printBtn").onclick = () => window.print();
     const n = Number(new URLSearchParams(location.search).get("n"));
     const entries = await loadEntries();
     const e = entries[n - 1];
-    if (!e || e.passed !== true) { msg.textContent = "This certificate is not available."; return; }
-    document.getElementById("cName").textContent = session.username;
-    document.getElementById("cTest").textContent = "English Test " + n;
-    document.getElementById("cScore").textContent = "with a score of " + e.pct + "%";
-    document.getElementById("cDate").textContent = new Date(e.when).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    cert.style.display = "block";
-    fit();
+    if (!e || e.passed !== true || e.certType === "none") { msg.textContent = "This certificate is not available."; return; }
+    NAME = session.username;
+    const dateText = new Date(e.when).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    draw(NAME, content(e, n), dateText);
+    document.getElementById("wrap").style.display = "block";
   } catch (err) {
     msg.textContent = "Could not load the certificate: " + err.message;
   }

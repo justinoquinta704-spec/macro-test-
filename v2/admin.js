@@ -6,6 +6,11 @@ const LEVEL_KEYS = Object.keys(LEVELS);
 const levelSelect = (cls, attr, value) =>
   `<select class="${cls}" ${attr}>${LEVEL_KEYS.map(k => `<option value="${k}" ${k === value ? "selected" : ""}>${LEVELS[k]}</option>`).join("")}</select>`;
 
+const DEFAULT_TOPICS = [
+  "Present simple", "Present continuous", "Past simple", "Future", "Verbs",
+  "Vocabulary", "Prepositions", "Articles", "Reading", "Listening", "Pronunciation", "Writing"
+];
+
 function adminMsg(text, ok = false) {
   const el = $("adminMsg");
   el.textContent = text;
@@ -17,9 +22,59 @@ function switchTab(name) {
   ["questions", "students", "settings", "results"].forEach(t => show("tab-" + t, t === name));
 }
 
+/* ---- extra fields created by code: question topic + test names ---- */
+function ensureTopicField() {
+  if ($("qTopic")) return;
+  const q = $("questionText");
+  const wrap = document.createElement("div");
+  wrap.innerHTML =
+    `<label class="field" for="qTopic">Topic (title shown above the question)</label>` +
+    `<input id="qTopic" type="text" list="topicList" maxlength="60" autocomplete="off" placeholder="e.g. Present simple, Verbs, Vocabulary">` +
+    `<datalist id="topicList"></datalist>`;
+  q.parentNode.insertBefore(wrap, q);
+  fillTopicList();
+}
+
+function fillTopicList() {
+  const list = $("topicList");
+  if (!list) return;
+  const used = S.admin.data ? S.admin.data.questions.map(q => (q.topic || "").trim()).filter(Boolean) : [];
+  const topics = [...new Set([...used, ...DEFAULT_TOPICS])];
+  list.innerHTML = topics.map(t => `<option value="${esc(t)}">`).join("");
+}
+
+function ensureNameFields() {
+  if ($("setName_basic")) return;
+  const btn = $("saveSettingsBtn");
+  const box = document.createElement("div");
+  box.innerHTML = `<h4>Test names</h4>` + LEVEL_KEYS.map(k =>
+    `<label class="field" for="setName_${k}">${LEVELS[k]} test name</label>` +
+    `<input id="setName_${k}" type="text" maxlength="60" placeholder="e.g. ${LEVELS[k]} Test">`).join("");
+  btn.parentNode.insertBefore(box, btn);
+  btn.addEventListener("click", saveNames);
+}
+
+function fillNames() {
+  LEVEL_KEYS.forEach(k => {
+    const el = $("setName_" + k);
+    if (el) el.value = (S.settings.names && S.settings.names[k]) || "";
+  });
+}
+
+async function saveNames() {
+  const names = {};
+  LEVEL_KEYS.forEach(k => { const el = $("setName_" + k); names[k] = el ? el.value.trim() : ""; });
+  try {
+    await S.store.saveSettings({ names });
+    S.settings = { ...S.settings, names };
+  } catch (e) { adminMsg("Could not save the test names: " + e.message); }
+}
+
 async function showAdmin() {
   show("view-admin");
   adminMsg("");
+  ensureTopicField();
+  ensureNameFields();
   S.admin.promptRec = mountRecorder($("promptRec"), {
     removable: true,
     onChange: url => { S.admin.promptAudio = url; }
@@ -28,6 +83,7 @@ async function showAdmin() {
     S.settings = await S.store.getSettings();
     await S.store.saveSettings(S.settings); // makes sure the settings document exists
     fillSettingsForm();
+    fillNames();
     await refreshAdmin();
     await syncQuestionCount();
   } catch (e) {
@@ -42,6 +98,7 @@ async function refreshAdmin() {
   renderQuestionList();
   renderStudents();
   renderResults();
+  fillTopicList();
 }
 
 /* ---- questions ---- */
@@ -51,6 +108,7 @@ function resetQuestionForm() {
   S.admin.editingId = null;
   S.admin.promptAudio = undefined;
   ["questionText", "optionA", "optionB", "optionC", "optionD"].forEach(id => { $(id).value = ""; });
+  if ($("qTopic")) $("qTopic").value = "";
   $("qType").value = "mcq";
   $("correct").value = "0";
   $("promptFile").value = "";
@@ -68,6 +126,7 @@ async function editQuestion(id) {
   S.admin.promptAudio = undefined;
   $("qType").value = q.type || "mcq";
   $("qLevel").value = q.level || "basic";
+  if ($("qTopic")) $("qTopic").value = q.topic || "";
   $("questionText").value = q.text;
   ["optionA", "optionB", "optionC", "optionD"].forEach((el, i) => { $(el).value = (q.options || [])[i] || ""; });
   $("correct").value = String(q.correct || 0);
@@ -111,6 +170,7 @@ async function confirmIfStarted(action) {
 async function saveQuestionForm() {
   const type = $("qType").value;
   const level = $("qLevel").value;
+  const topic = $("qTopic") ? $("qTopic").value.trim() : "";
   const text = $("questionText").value.trim();
   const options = type === "mcq" ? ["optionA", "optionB", "optionC", "optionD"].map(id => $(id).value.trim()) : [];
   const correct = Number($("correct").value);
@@ -130,7 +190,7 @@ async function saveQuestionForm() {
   $("saveQuestionBtn").disabled = true;
   try {
     await S.store.saveQuestion({
-      id: editing || newId(), type, level, text, options, hasAudio,
+      id: editing || newId(), type, level, topic, text, options, hasAudio,
       ...(type === "mcq" ? { correct } : {}),
       createdAt: existing ? existing.createdAt : Date.now()
     }, audio);
@@ -170,7 +230,7 @@ function questionItem(q, i) {
   return `
     <div class="question">
       <strong>${i + 1}. ${esc(q.text)}</strong>
-      <span class="pill">${TYPE_LABEL[q.type || "mcq"]}</span>${q.hasAudio ? ' <span class="pill">has audio</span>' : ""}
+      <span class="pill">${TYPE_LABEL[q.type || "mcq"]}</span>${q.topic ? ` <span class="pill">${esc(q.topic)}</span>` : ""}${q.hasAudio ? ' <span class="pill">has audio</span>' : ""}
       ${q.type === "mcq" || !q.type ? `<p>${q.options.map((o, j) =>
         `${LETTERS[j]}: ${esc(o)}${j === q.correct ? " <span class='pill ok'>correct</span>" : ""}`).join("<br>")}</p>` : ""}
       <div class="row" style="margin-top:8px">

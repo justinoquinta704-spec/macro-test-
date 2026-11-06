@@ -34,19 +34,26 @@ function testList(entries) {
         const s = e.skills[k];
         return SKILLS[k] + " " + (s && s.total ? Math.round(s.score / s.total * 100) + "%" : "–");
       }).join(" · ")}</p>` : ""}
+      ${e.passed === true ? `<a href="certificado.html?n=${entries.length - i}"
+        style="display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:#143d78;color:#fff;text-decoration:none;font-size:14px">Certificate</a>` : ""}
     </div>`).join("");
+}
+
+async function loadEntries() {
+  const uid = S.session.uid;
+  const [result, hist] = await Promise.all([S.store.getResult(uid), S.store.getMyHistory(uid)]);
+  const entries = hist.filter(r => r.published === true).map(r => ({
+    when: r.submittedAt || r.startedAt, pct: r.percentage, passed: r.passed, skills: r.skills
+  }));
+  if (result) entries.push({ when: result.date, pct: result.percentage, passed: result.passed, skills: result.skills });
+  entries.sort((a, b) => a.when - b.when);
+  return entries;
 }
 
 async function renderDashboard() {
   const box = $("dashboard");
   try {
-    const uid = S.session.uid;
-    const [result, hist] = await Promise.all([S.store.getResult(uid), S.store.getMyHistory(uid)]);
-    const entries = hist.filter(r => r.published === true).map(r => ({
-      when: r.submittedAt || r.startedAt, pct: r.percentage, passed: r.passed, skills: r.skills
-    }));
-    if (result) entries.push({ when: result.date, pct: result.percentage, passed: result.passed, skills: result.skills });
-    entries.sort((a, b) => a.when - b.when);
+    const entries = await loadEntries();
     if (!entries.length) { show("dashboard", false); return; }
     box.innerHTML = `
       <h2>Your progress</h2>

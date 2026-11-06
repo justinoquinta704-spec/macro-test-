@@ -26,7 +26,7 @@ function testList(entries) {
   return [...entries].reverse().map((e, i) => `
     <div class="question">
       <div class="row" style="justify-content:space-between">
-        <b>Test ${entries.length - i} · ${esc(shortDate(e.when))}</b>
+        <b>Test ${entries.length - i}${e.topic ? " · " + esc(e.topic) : ""} · ${esc(shortDate(e.when))}</b>
         <span><b>${e.pct}%</b> ${typeof e.passed === "boolean"
           ? `<span class="pill ${e.passed ? "ok" : "bad"}">${e.passed ? "Passed" : "Not passed"}</span>` : ""}</span>
       </div>
@@ -34,7 +34,7 @@ function testList(entries) {
         const s = e.skills[k];
         return SKILLS[k] + " " + (s && s.total ? Math.round(s.score / s.total * 100) + "%" : "–");
       }).join(" · ")}</p>` : ""}
-      ${e.passed === true ? `<a href="certificado.html?n=${entries.length - i}"
+      ${e.passed === true && e.certType !== "none" ? `<a href="certificado.html?n=${entries.length - i}"
         style="display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:#143d78;color:#fff;text-decoration:none;font-size:14px">Certificate</a>` : ""}
     </div>`).join("");
 }
@@ -43,9 +43,13 @@ async function loadEntries() {
   const uid = S.session.uid;
   const [result, hist] = await Promise.all([S.store.getResult(uid), S.store.getMyHistory(uid)]);
   const entries = hist.filter(r => r.published === true).map(r => ({
-    when: r.submittedAt || r.startedAt, pct: r.percentage, passed: r.passed, skills: r.skills
+    when: r.submittedAt || r.startedAt, pct: r.percentage, passed: r.passed, skills: r.skills,
+    topic: r.topic, certType: r.certType, level: r.level
   }));
-  if (result) entries.push({ when: result.date, pct: result.percentage, passed: result.passed, skills: result.skills });
+  if (result) entries.push({
+    when: result.date, pct: result.percentage, passed: result.passed, skills: result.skills,
+    topic: result.topic, certType: result.certType, level: result.level
+  });
   entries.sort((a, b) => a.when - b.when);
   return entries;
 }

@@ -164,7 +164,8 @@ async function startTest() {
 async function beginTest() {
   try {
          const tp = (S.session.topic || "").trim().toLowerCase();
-    const qs = (await S.store.getQuestions({ withKeys: false, level: S.session.level })).filter(q => !tp || (q.topic || "").trim().toLowerCase() === tp);
+         const tid = S.session.testId || "";
+    const qs = (await S.store.getQuestions({ withKeys: false, level: S.session.level })).filter(q => !tid || tid === "__all__" || q.testId === tid);
     const byId = new Map(qs.map(q => [q.id, q]));
     let a = S.attempt;
 

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificate · School of Communicators</title>
+<style>
+@page { size: A4 landscape; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef2f8; font-family: Georgia, "Times New Roman", serif; color: #0b2a5b; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; font-family: system-ui, sans-serif; }
+.bar button { background: #143d78; color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 15px; }
+.bar button.s { background: #e8f0fe; color: #0b2a5b; }
+#msg { padding: 0 12px; font-family: system-ui, sans-serif; color: #b42318; }
+#stage { width: 100%; padding: 0 12px 24px; }
+#cert { width: 1000px; height: 707px; margin: 0 auto; background: #fff; border: 8px solid #0b2a5b; padding: 18px; transform-origin: top left; }
+#inner { height: 100%; border: 2px solid #143d78; text-align: center; padding: 48px 70px; display: flex; flex-direction: column; align-items: center; }
+.brand { font-family: system-ui, sans-serif; letter-spacing: 6px; font-size: 16px; color: #143d78; }
+.title { font-size: 50px; margin: 26px 0 6px; font-weight: 700; }
+.line { width: 90px; height: 3px; background: #143d78; margin: 10px 0 24px; }
+.small { font-family: system-ui, sans-serif; font-size: 18px; color: #5b6785; }
+.name { font-size: 54px; margin: 14px 0 10px; font-style: italic; }
+.test { font-size: 34px; margin: 10px 0 6px; font-weight: 700; }
+.score { font-family: system-ui, sans-serif; font-size: 20px; color: #143d78; }
+.foot { margin-top: auto; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: system-ui, sans-serif; font-size: 16px; color: #5b6785; }
+.foot div { width: 260px; border-top: 1.5px solid #0b2a5b; padding-top: 8px; }
+@media print {
+  .noprint { display: none !important; }
+  body { background: #fff; }
+  #stage { padding: 0; height: auto !important; }
+  #cert { transform: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="bar noprint">
+  <button class="s" onclick="location.href='dashboard.html'">Back</button>
+  <button id="printBtn">Print / Save as PDF</button>
+</div>
+<p id="msg" class="noprint"></p>
+
+<div id="stage">
+  <div id="cert" class="hide">
+    <div id="inner">
+      <div class="brand">SCHOOL OF COMMUNICATORS</div>
+      <div class="title">Certificate of Achievement</div>
+      <div class="line"></div>
+      <div class="small">This certifies that</div>
+      <div class="name" id="cName"></div>
+      <div class="small">has successfully passed</div>
+      <div class="test" id="cTest"></div>
+      <div class="score" id="cScore"></div>
+      <div class="foot">
+        <div id="cDate"></div>
+        <div>Authorized signature</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="audio.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+<script src="student2.js"></script>
+<script src="admin.js"></script>
+<script src="review.js"></script>
+<script src="results.js"></script>
+<script src="features.js"></script>
+<script src="dashboard.js"></script>
+<script>
+const cert = document.getElementById("cert"), stage = document.getElementById("stage");
+function fit() {
+  const s = Math.min(1, (stage.clientWidth - 24) / 1000);
+  cert.style.transform = "scale(" + s + ")";
+  stage.style.height = (707 * s + 24) + "px";
+}
+window.addEventListener("resize", fit);
+window.addEventListener("beforeprint", () => { cert.style.transform = "none"; stage.style.height = "auto"; });
+window.addEventListener("afterprint", fit);
+document.getElementById("printBtn").onclick = () => window.print();
+
+(async function () {
+  const msg = document.getElementById("msg");
+  cert.style.display = "none";
+  try {
+    S.store = await createFirebaseStore(FIREBASE_CONFIG);
+    const session = await S.store.init();
+    if (!session) { location.href = "index.html"; return; }
+    if (session.role === "admin") { location.href = "home.html"; return; }
+    S.session = session;
+    const n = Number(new URLSearchParams(location.search).get("n"));
+    const entries = await loadEntries();
+    const e = entries[n - 1];
+    if (!e || e.passed !== true) { msg.textContent = "This certificate is not available."; return; }
+    document.getElementById("cName").textContent = session.username;
+    document.getElementById("cTest").textContent = "English Test " + n;
+    document.getElementById("cScore").textContent = "with a score of " + e.pct + "%";
+    document.getElementById("cDate").textContent = new Date(e.when).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    cert.style.display = "block";
+    fit();
+  } catch (err) {
+    msg.textContent = "Could not load the certificate: " + err.message;
+  }
+})();
+</script>
+</body>
+</html>

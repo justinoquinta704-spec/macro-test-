@@ -37,7 +37,7 @@ async function createFirebaseStore(cfg) {
   async function sessionOf(u) {
     if (u.email === ADMIN_EMAIL) return { uid: u.uid, email: u.email, username: "Teacher", role: "admin" };
     const m = await one("members", u.uid);
-    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", released: m.released === true, topic: m.topic || "", role: "student" } : null;
+    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", released: m.released === true, testId: m.testId || "", topic: m.topic || "", role: "student" } : null;
   }
 
   return {
@@ -96,6 +96,10 @@ async function createFirebaseStore(cfg) {
       catch { return { ...DEFAULTS, counts: {} }; }
     },
     saveSettings: s => F.setDoc(ref("settings", "test"), s, { merge: true }),
+    /* tests (title + level) live inside the settings document */
+    saveTest: t => F.setDoc(ref("settings", "test"),
+      { tests: { [t.id]: { title: t.title, level: t.level, createdAt: t.createdAt } } }, { merge: true }),
+    deleteTest: id => F.updateDoc(ref("settings", "test"), { ["tests." + id]: F.deleteField() }),
 
     async getQuestions({ withKeys, level }) {
       const qs = await all("questions", level);
@@ -151,7 +155,7 @@ async function createFirebaseStore(cfg) {
     },
     saveGrades: (uid, marks) => F.setDoc(ref("grades", uid), { uid, marks }),
     async publishResults(list) {
-      /* the topic, certificate type and level chosen for each student are saved inside the result */
+      /* the test title, certificate type and level chosen for each student are saved inside the result */
       const meta = {};
       for (const r of list) {
         const m = await one("members", r.uid);

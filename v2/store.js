@@ -37,7 +37,7 @@ async function createFirebaseStore(cfg) {
   async function sessionOf(u) {
     if (u.email === ADMIN_EMAIL) return { uid: u.uid, email: u.email, username: "Teacher", role: "admin" };
     const m = await one("members", u.uid);
-    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", role: "student" } : null;  released: m.released === true,
+    return m ? { uid: u.uid, email: u.email, username: m.name, level: m.level || "basic", released: m.released === true, role: "student" } : null;
   }
 
   return {
@@ -64,7 +64,7 @@ async function createFirebaseStore(cfg) {
       return uid;
     },
     setStudentLevel: (uid, level) => F.updateDoc(ref("members", uid), { level }),
-         setStudentRelease: (uid, released) => F.updateDoc(ref("members", uid), { released }),
+    setStudentRelease: (uid, released) => F.updateDoc(ref("members", uid), { released }),
     removeStudent: uid => F.deleteDoc(ref("members", uid)),
     async loginStudent({ email, password }) {
       let user;

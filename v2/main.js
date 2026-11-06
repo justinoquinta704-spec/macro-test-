@@ -1,13 +1,19 @@
 /* ---- students (accounts are created by the teacher) ---- */
+const TOPIC_SUGGESTIONS = ["Verb to be", "Present simple", "Present continuous", "Past simple", "Future", "Verbs", "Vocabulary", "Prepositions", "Articles", "Pronunciation"];
+const CERT_TYPES = { achievement: "Achievement (test)", class: "Class", level: "Level completion", course: "Course completion", none: "No certificate" };
+
 function renderStudents() {
   const ms = [...S.admin.data.members].sort((a, b) => a.name.localeCompare(b.name));
   $("stuCount").textContent = ms.length ? `(${ms.length})` : "";
   $("studentList").innerHTML = ms.length ? `
+    <datalist id="topicSug">${TOPIC_SUGGESTIONS.map(t => `<option value="${esc(t)}">`).join("")}</datalist>
     <table>
-      <thead><tr><th>Full name</th><th>Email</th><th>Level</th><th>Test</th><th></th></tr></thead>
+      <thead><tr><th>Full name</th><th>Email</th><th>Level</th><th>Topic</th><th>Certificate</th><th>Test</th><th></th></tr></thead>
       <tbody>${ms.map(m => `<tr>
         <td><input type="text" data-name-uid="${esc(m.uid)}" value="${esc(m.name)}" style="min-width:170px;margin:0"></td><td>${esc(m.email)}</td>
         <td>${levelSelect("grade", `data-setlevel="${esc(m.uid)}"`, m.level || "basic")}</td>
+        <td><input type="text" list="topicSug" data-topic-uid="${esc(m.uid)}" value="${esc(m.topic || "")}" placeholder="e.g. Verb to be" style="min-width:150px;margin:0"></td>
+        <td><select data-cert-uid="${esc(m.uid)}" style="margin:0">${Object.keys(CERT_TYPES).map(k => `<option value="${k}" ${k === (m.certType || "achievement") ? "selected" : ""}>${CERT_TYPES[k]}</option>`).join("")}</select></td>
         <td><button class="${m.released ? "" : "secondary "}small" data-release="${esc(m.uid)}">${m.released ? "Released" : "Locked"}</button></td>
         <td><div class="row">
           <button class="secondary small" data-reset-pw="${esc(m.email)}">Send reset email</button>
@@ -149,14 +155,23 @@ $("studentList").addEventListener("click", async e => {
   } catch (err) { adminMsg("Could not change: " + err.message); }
 });
 
-/* edit a student's full name */
+/* edit a student's full name, topic and certificate type */
 $("studentList").addEventListener("change", async e => {
-  const uid = e.target.dataset.nameUid;
-  if (!uid) return;
-  const name = e.target.value.trim();
-  if (name.length < 2) { adminMsg("Enter the student's full name."); return; }
-  try { await S.store.setStudentName(uid, name); await refreshAdmin(); adminMsg("Name updated.", true); }
-  catch (err) { adminMsg("Could not change the name: " + err.message); }
+  const t = e.target;
+  try {
+    if (t.dataset.nameUid) {
+      const name = t.value.trim();
+      if (name.length < 2) { adminMsg("Enter the student's full name."); return; }
+      await S.store.setStudentName(t.dataset.nameUid, name);
+      await refreshAdmin(); adminMsg("Name updated.", true);
+    } else if (t.dataset.topicUid) {
+      await S.store.updateMember(t.dataset.topicUid, { topic: t.value.trim() });
+      await refreshAdmin(); adminMsg("Topic saved.", true);
+    } else if (t.dataset.certUid) {
+      await S.store.updateMember(t.dataset.certUid, { certType: t.value });
+      await refreshAdmin(); adminMsg("Certificate type saved.", true);
+    }
+  } catch (err) { adminMsg("Could not save: " + err.message); }
 });
 
 boot();

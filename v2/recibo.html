@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt · School of Communicators</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef2f8; font-family: system-ui, sans-serif; color: #0b2a5b; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; }
+.bar button { background: #143d78; color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 15px; }
+.bar button.s { background: #e8f0fe; color: #0b2a5b; }
+#msg { padding: 0 12px; color: #b42318; }
+#note { padding: 0 12px 8px; color: #5b6785; font-size: 14px; }
+#wrap { padding: 0 12px 24px; display: none; }
+#cv { width: 100%; height: auto; display: block; background: #fff; box-shadow: 0 2px 10px #0003; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="s" id="backBtn">Back</button>
+  <button id="pdfBtn">Download PDF</button>
+  <button id="imgBtn" class="s">Download image</button>
+</div>
+<p id="msg"></p>
+<p id="note">To print: download the PDF, open it and print it from the PDF viewer (A5 or A4, landscape).</p>
+<div id="wrap"><canvas id="cv" width="2480" height="1748"></canvas></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="core.js"></script>
+<script src="audio.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+<script src="student2.js"></script>
+<script src="admin.js"></script>
+<script src="review.js"></script>
+<script src="results.js"></script>
+<script src="features.js"></script>
+<script src="finance.js"></script>
+<script>
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const K = kit(ctx);
+let REC = null;
+
+function label(t, x, y) { K.spaced(t, x, y, 34, 8, GREY); }
+function leftSpaced(t, x, y) {
+  ctx.font = "normal 600 34px " + SANS;
+  ctx.fillStyle = GREY; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  let cx = x;
+  [...t].forEach(c => { ctx.fillText(c, cx, y); cx += ctx.measureText(c).width + 8; });
+}
+
+function draw(p) {
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 20; ctx.strokeRect(60, 60, W - 120, H - 120);
+  ctx.strokeStyle = BLUE; ctx.lineWidth = 4; ctx.strokeRect(110, 110, W - 220, H - 220);
+
+  K.put("Date issued: " + fmtLong(p.createdAt), 200, 235, 40, { align: "left", color: GREY });
+  K.put("No. " + p.number, W - 200, 235, 46, { align: "right", weight: "bold" });
+  K.spaced("SCHOOL OF COMMUNICATORS", W / 2, 235, 40, 10, BLUE);
+
+  K.put("Payment Receipt", W / 2, 400, 150, { weight: "bold", family: SERIF });
+  ctx.fillStyle = BLUE; ctx.fillRect(W / 2 - 150, 450, 300, 8);
+
+  const L = 240, R = 1330, MW = 880;
+  leftSpaced("RECEIVED FROM", L, 590);
+  K.fitted(p.name, L, 690, 2000, 100, "normal", "italic", SERIF, NAVY, "left");
+  ctx.fillStyle = "#c9d3e6"; ctx.fillRect(L, 725, W - 2 * L, 4);
+
+  leftSpaced("AMOUNT", L, 860);
+  K.fitted(fmtMoney(p.amount, p.currency), L, 960, MW, 110, "bold", "normal", SERIF, NAVY, "left");
+  leftSpaced("PAYMENT FOR", R, 860);
+  K.put("Monthly tuition", R, 935, 62, { align: "left", weight: "bold" });
+  K.fitted(p.months + (p.months > 1 ? " months: " : " month: ") + periodLabel(p.startMonth, p.months), R, 1005, MW, 50, "normal", "normal", SANS, BLUE, "left");
+
+  leftSpaced("PAYMENT DATE", L, 1160);
+  K.put(fmtLong(p.paidOn), L, 1240, 62, { align: "left", weight: "bold" });
+  leftSpaced("PAYMENT METHOD", R, 1160);
+  K.fitted(p.method, R, 1240, MW, 62, "bold", "normal", SANS, NAVY, "left");
+  if (p.note) K.fitted("Note: " + p.note, L, 1345, W - 2 * L, 42, "normal", "italic", SANS, GREY, "left");
+
+  /* PAID stamp */
+  ctx.strokeStyle = BLUE; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L, 1440, 330, 130, 24) : ctx.rect(L, 1440, 330, 130); ctx.stroke();
+  K.put("PAID", L + 165, 1535, 84, { weight: "bold", family: SERIF, color: BLUE });
+
+  /* signature */
+  ctx.fillStyle = NAVY; ctx.fillRect(W - 880, 1480, 680, 4);
+  K.put(SIGNER, W - 540, 1535, 46, { weight: "bold" });
+  K.put("Authorized signature", W - 540, 1580, 32, { color: GREY });
+
+  /* discreet private code */
+  K.put("Code " + p.code, W / 2, 1612, 28, { color: "#9aa6bf" });
+}
+
+const fileBase = () => "Receipt " + (REC ? REC.number : "") + " - " + safeName(REC ? REC.name : "");
+document.getElementById("pdfBtn").onclick = () => savePdf(cv, "a5", 210, 148, fileBase());
+document.getElementById("imgBtn").onclick = () => savePng(cv, fileBase());
+
+(async function () {
+  const msg = document.getElementById("msg");
+  try {
+    S.store = await createFirebaseStore(FIREBASE_CONFIG);
+    const session = await S.store.init();
+    if (!session) { location.href = "index.html"; return; }
+    document.getElementById("backBtn").onclick = () => { location.href = session.role === "admin" ? "index.html?tests=1" : "perfil.html"; };
+    const id = new URLSearchParams(location.search).get("id");
+    const rec = id ? await getDocData("pagamentos", id) : null;
+    if (!rec) { msg.textContent = "This receipt is not available."; return; }
+    REC = rec;
+    draw(rec);
+    document.getElementById("wrap").style.display = "block";
+  } catch (err) {
+    msg.textContent = "Could not load the receipt: " + (err.code || err.message);
+  }
+})();
+</script>
+</body>
+</html>

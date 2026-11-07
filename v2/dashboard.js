@@ -34,8 +34,6 @@ function testList(entries) {
         const s = e.skills[k];
         return SKILLS[k] + " " + (s && s.total ? Math.round(s.score / s.total * 100) + "%" : "–");
       }).join(" · ")}</p>` : ""}
-      ${e.passed === true && e.certType !== "none" ? `<a href="certificado.html?n=${entries.length - i}"
-        style="display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:#143d78;color:#fff;text-decoration:none;font-size:14px">Certificate</a>` : ""}
     </div>`).join("");
 }
 

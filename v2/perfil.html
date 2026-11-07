@@ -25,6 +25,16 @@
     </div>
     <p id="msg" class="msg" role="alert"></p>
   </div>
+
+  <div class="card">
+    <h3>My certificates</h3>
+    <div id="myCerts"><p class="muted">Loading…</p></div>
+  </div>
+
+  <div class="card">
+    <h3>My receipts</h3>
+    <div id="myRecs"><p class="muted">Loading…</p></div>
+  </div>
 </div>
 
 <script src="core.js"></script>
@@ -36,7 +46,9 @@
 <script src="review.js"></script>
 <script src="results.js"></script>
 <script src="features.js"></script>
+<script src="finance.js"></script>
 <script>
+const btn = href => `<a href="${href}" style="display:inline-block;margin-top:8px;padding:8px 14px;border-radius:8px;background:#143d78;color:#fff;text-decoration:none;font-size:14px">Open</a>`;
 (async function () {
   try {
     S.store = await createFirebaseStore(FIREBASE_CONFIG);
@@ -49,8 +61,25 @@
       await S.store.logout();
       location.href = "index.html";
     };
+
+    const certs = (await listDocs("certificados", session.uid)).filter(c => c.passed !== false && c.certType !== "none")
+      .sort((a, b) => b.when - a.when);
+    document.getElementById("myCerts").innerHTML = certs.length ? certs.map(c => `
+      <div class="question">
+        <div class="row" style="justify-content:space-between"><b>${esc((CERT_LABEL[c.certType] || "Certificate") + (c.topic ? " · " + c.topic : ""))}</b><span class="muted">${esc(c.number)}</span></div>
+        <p class="muted" style="margin:6px 0 0">${esc(fmtDay(c.when))} · ${esc(c.pct)}%</p>
+        ${btn("certificado.html?id=" + encodeURIComponent(c.id))}
+      </div>`).join("") : "<p class='muted'>No certificates yet. They appear here after you pass a test.</p>";
+
+    const recs = (await listDocs("pagamentos", session.uid)).sort((a, b) => b.paidOn - a.paidOn);
+    document.getElementById("myRecs").innerHTML = recs.length ? recs.map(p => `
+      <div class="question">
+        <div class="row" style="justify-content:space-between"><b>${esc(periodLabel(p.startMonth, p.months))}</b><span class="muted">${esc(p.number)}</span></div>
+        <p class="muted" style="margin:6px 0 0">${esc(fmtMoney(p.amount, p.currency))} · ${esc(fmtDay(p.paidOn))} · ${esc(p.method)}</p>
+        ${btn("recibo.html?id=" + encodeURIComponent(p.id))}
+      </div>`).join("") : "<p class='muted'>No receipts yet.</p>";
   } catch (e) {
-    document.getElementById("msg").textContent = "Could not load your profile: " + e.message;
+    document.getElementById("msg").textContent = "Could not load your profile: " + (e.code || e.message);
   }
 })();
 </script>

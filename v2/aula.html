@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class · School of Communicators</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef2f8;font-family:Roboto,system-ui,sans-serif;color:#0b2a5b}
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:8px;flex-wrap:wrap;padding:12px;background:#071d3d}
+.bar button{background:#e8f0fe;color:#0b2a5b;border:0;border-radius:10px;padding:10px 16px;font-size:15px}
+.bar button.p{background:#2563eb;color:#fff}
+h2{margin:14px 12px 4px;font-size:22px}
+#meta{margin:0 12px 10px;color:#5b6785;font-size:14px}
+#msg{margin:0 12px;color:#b42318}
+#pages{padding:0 12px 24px}
+#pages img{display:block;width:100%;height:auto;margin:0 auto 12px;background:#fff;box-shadow:0 2px 10px #0003}
+</style>
+</head>
+<body>
+<div class="bar">
+  <button id="back">Back</button>
+  <button id="pdf" class="p hide">Download PDF</button>
+</div>
+<h2 id="title">Loading…</h2>
+<p id="meta"></p>
+<p id="msg"></p>
+<div id="pages"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
+  authDomain: "school-of-communicators.firebaseapp.com",
+  projectId: "school-of-communicators",
+  storageBucket: "school-of-communicators.firebasestorage.app",
+  messagingSenderId: "601098815550",
+  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
+  measurementId: "G-45TQ4JWK8V"
+};
+const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth(), db = firebase.firestore();
+const $ = id => document.getElementById(id);
+const imgs = [];
+let CLS = null;
+$('pdf').classList.add('hide');
+
+$('back').onclick = () => { history.length > 1 ? history.back() : (location.href = 'perfil.html'); };
+
+auth.onAuthStateChanged(async u => {
+  if (!u) { location.href = 'index.html'; return; }
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) { $('title').textContent = 'Class not found'; return; }
+  try {
+    const d = await db.collection('aulas').doc(id).get();
+    if (!d.exists) { $('title').textContent = 'Class not found'; return; }
+    CLS = d.data();
+    $('title').textContent = CLS.title;
+    $('meta').textContent = new Date(CLS.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (!CLS.hasDoc) { $('msg').textContent = 'This class has no document.'; return; }
+    const ps = await db.collection('aulas').doc(id).collection('pages').get();
+    const list = ps.docs.map(x => ({ n: Number(x.id), img: x.data().img })).sort((a, b) => a.n - b.n);
+    for (const p of list) {
+      const im = new Image(); im.src = p.img;
+      await new Promise(r => { im.onload = r; im.onerror = r; });
+      imgs.push({ img: p.img, ratio: im.naturalWidth / im.naturalHeight });
+      im.alt = 'Page ' + (p.n + 1);
+      $('pages').appendChild(im);
+    }
+    if (imgs.length) $('pdf').classList.remove('hide');
+  } catch (e) {
+    $('title').textContent = 'Class unavailable';
+    $('msg').textContent = (e.code === 'permission-denied')
+      ? 'This class is locked. Your tuition may not be up to date.'
+      : 'Could not load the class: ' + (e.code || e.message);
+  }
+});
+
+$('pdf').onclick = () => {
+  if (!window.jspdf) { $('msg').textContent = 'The PDF tool did not load. Check your connection.'; return; }
+  const { jsPDF } = window.jspdf;
+  let pdf = null;
+  imgs.forEach(it => {
+    const w = it.ratio < 1 ? 210 : 297, h = w / it.ratio, o = w > h ? 'landscape' : 'portrait';
+    if (!pdf) pdf = new jsPDF({ unit: 'mm', format: [w, h], orientation: o }); else pdf.addPage([w, h], o);
+    pdf.addImage(it.img, 'JPEG', 0, 0, w, h);
+  });
+  pdf.save(String(CLS.title || 'Class').replace(/[\\/:*?"<>|]+/g, '').trim() + '.pdf');
+};
+</script>
+</body>
+</html>

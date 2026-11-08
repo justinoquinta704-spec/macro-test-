@@ -1,5 +1,5 @@
 /* =====================================================================
-   FINANCE: payments + receipts, and the register of issued certificates
+   FINANCE: payments + receipts, class access, and the certificate register
    Used by the teacher panel (index.html) and by the student pages.
    ===================================================================== */
 const NAVY = "#0b2a5b", BLUE = "#143d78", GREY = "#5b6785";
@@ -153,7 +153,11 @@ const PAY_HTML = `
     <label class="field" for="pNote">Note (optional)</label><input id="pNote" type="text" maxlength="120" autocomplete="off">
     <div class="row"><button id="pSave">Save payment and issue receipt</button></div>
   </div>
-  <div class="card"><h3>Payment status</h3><div id="payStatus" class="table-wrap"></div></div>
+  <div class="card">
+    <h3>Payment status and class access</h3>
+    <p class="muted">Automatic: the classroom opens when the student is paid up to the current month and locks when not. Always open / Always blocked overrides it.</p>
+    <div id="payStatus" class="table-wrap"></div>
+  </div>
   <div class="card">
     <h3>Receipts issued <span id="recCount" class="muted"></span></h3>
     <input id="recSearch" type="text" placeholder="Search by name, number, code or method">
@@ -197,9 +201,20 @@ function ensureFinanceUI() {
       adminMsg(n ? n + " certificate(s) issued." : "Nothing new to issue.", true);
     } catch (e) { adminMsg("Could not issue certificates: " + (e.code || e.message)); }
   };
+  $("payStatus").addEventListener("change", async e => {
+    const uid = e.target.dataset.accessUid;
+    if (!uid) return;
+    try {
+      await S.store.updateMember(uid, { access: e.target.value });
+      const m = S.admin.data.members.find(x => x.uid === uid);
+      if (m) m.access = e.target.value;
+      renderStatus();
+      adminMsg("Class access saved.", true);
+    } catch (err) { adminMsg("Could not save: " + (err.code || err.message)); }
+  });
   $("recList").addEventListener("click", async e => {
     const x = e.target.closest("button"); if (!x || !x.dataset.recdel) return;
-    if (!(await ask({ title: "Delete this receipt?", body: "This cannot be undone.", ok: "Delete", cancel: "Cancel" }))) return;
+    if (!(await ask({ title: "Delete this receipt?", body: "This cannot be undone. The student's class access is recalculated.", ok: "Delete", cancel: "Cancel" }))) return;
     try { await delDoc("pagamentos", x.dataset.recdel); await renderFinance(); adminMsg("Receipt deleted.", true); }
     catch (err) { adminMsg("Could not delete: " + (err.code || err.message)); }
   });
@@ -243,9 +258,7 @@ async function savePaymentForm() {
   } finally { $("pSave").disabled = false; }
 }
 
-function renderStatus() {
-  const now = new Date(), cur = now.getFullYear() * 12 + now.getMonth();
-  const ms = [...S.admin.data.members].sort((a, b) => a.name.localeCompare(b.name));
+function endsByUid() {
   const by = {};
   FIN.pay.forEach(p => {
     const end = monthIdx(p.startMonth) + p.months - 1;
@@ -253,14 +266,39 @@ function renderStatus() {
     if (end > o.end) o.end = end;
     if (p.paidOn > o.last) o.last = p.paidOn;
   });
-  $("payStatus").innerHTML = ms.length ? `<table><thead><tr><th>Student</th><th>Paid until</th><th>Status</th><th>Last payment</th></tr></thead><tbody>${
+  return by;
+}
+
+/* keeps members.paidUntil in step with the receipts (the Firebase rules use it to open/lock the classroom) */
+async function syncAccess() {
+  const by = endsByUid();
+  for (const m of S.admin.data.members) {
+    const want = by[m.uid] ? by[m.uid].end : 0;
+    if ((m.paidUntil || 0) !== want) {
+      try { await S.store.updateMember(m.uid, { paidUntil: want }); m.paidUntil = want; } catch (e) { /* ignore */ }
+    }
+  }
+}
+
+function renderStatus() {
+  const now = new Date(), cur = now.getFullYear() * 12 + now.getMonth();
+  const ms = [...S.admin.data.members].sort((a, b) => a.name.localeCompare(b.name));
+  const by = endsByUid();
+  $("payStatus").innerHTML = ms.length ? `<table><thead><tr><th>Student</th><th>Paid until</th><th>Payment</th><th>Last payment</th><th>Class access</th><th>Now</th></tr></thead><tbody>${
     ms.map(m => {
       const o = by[m.uid];
       let label, cls;
       if (!o) { label = "No payments"; cls = "bad"; }
       else if (o.end >= cur) { label = "Up to date"; cls = "ok"; }
       else { const late = cur - o.end; label = "Overdue (" + late + " month" + (late > 1 ? "s" : "") + ")"; cls = "bad"; }
-      return `<tr><td>${esc(m.name)}</td><td>${o ? monthName(o.end) : "–"}</td><td><span class="pill ${cls}">${label}</span></td><td>${o ? fmtDay(o.last) : "–"}</td></tr>`;
+      const acc = m.access || "auto";
+      const open = acc === "open" || (acc === "auto" && o && o.end >= cur);
+      return `<tr><td>${esc(m.name)}</td><td>${o ? monthName(o.end) : "–"}</td><td><span class="pill ${cls}">${label}</span></td><td>${o ? fmtDay(o.last) : "–"}</td>
+        <td><select data-access-uid="${esc(m.uid)}" style="margin:0">
+          <option value="auto" ${acc === "auto" ? "selected" : ""}>Automatic</option>
+          <option value="open" ${acc === "open" ? "selected" : ""}>Always open</option>
+          <option value="blocked" ${acc === "blocked" ? "selected" : ""}>Always blocked</option></select></td>
+        <td><span class="pill ${open ? "ok" : "bad"}">${open ? "Open" : "Blocked"}</span></td></tr>`;
     }).join("")}</tbody></table>` : "<p>No students yet.</p>";
 }
 
@@ -292,6 +330,7 @@ async function renderFinance() {
   try {
     FIN.pay = await listDocs("pagamentos");
     FIN.certs = await listDocs("certificados");
+    await syncAccess();
     renderStatus(); renderReceipts(); renderCerts();
   } catch (e) {
     adminMsg("Could not load payments and certificates (" + (e.code || e.message) + "). Check that the new Firestore rules were published.");
@@ -322,7 +361,6 @@ async function issueForPublished() {
 /* ---- hooks into the existing teacher panel (only on the main page) ---- */
 if (document.getElementById("view-admin")) {
   try {
-    const baseSwitch = switchTab;
     switchTab = function (name) {
       document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
       ["questions", "students", "settings", "results", "payments", "certs"].forEach(t => { if ($("tab-" + t)) show("tab-" + t, t === name); });

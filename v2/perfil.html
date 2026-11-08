@@ -27,6 +27,11 @@
   </div>
 
   <div class="card">
+    <h3>My classes</h3>
+    <div id="myClasses"><p class="muted">Loading…</p></div>
+  </div>
+
+  <div class="card">
     <h3>My certificates</h3>
     <div id="myCerts"><p class="muted">Loading…</p></div>
   </div>
@@ -61,6 +66,19 @@ const btn = href => `<a href="${href}" style="display:inline-block;margin-top:8p
       await S.store.logout();
       location.href = "index.html";
     };
+
+    /* classes (locked when the tuition is not up to date) */
+    try {
+      const mine = await listDocs("aulas", session.uid), all = await listDocs("aulas", "all");
+      const classes = [...mine, ...all].sort((a, b) => b.createdAt - a.createdAt);
+      document.getElementById("myClasses").innerHTML = classes.length ? classes.map(c => `
+        <div class="question">
+          <div class="row" style="justify-content:space-between"><b>${esc(c.title)}</b><span class="muted">${esc(fmtDay(c.createdAt))}</span></div>
+          ${c.hasDoc ? btn("aula.html?id=" + encodeURIComponent(c.id)) : "<p class='muted' style='margin:6px 0 0'>No document</p>"}
+        </div>`).join("") : "<p class='muted'>No classes yet. They appear here after your teacher saves them.</p>";
+    } catch (e) {
+      document.getElementById("myClasses").innerHTML = "<p class='muted'>Your classes are locked. Your tuition may not be up to date.</p>";
+    }
 
     const certs = (await listDocs("certificados", session.uid)).filter(c => c.passed !== false && c.certType !== "none")
       .sort((a, b) => b.when - a.when);

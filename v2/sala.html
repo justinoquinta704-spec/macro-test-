@@ -1,223 +1,262 @@
-// ADICIONE JUNTO DAS VARIÁVEIS GLOBAIS
-const erasePending = new Map();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-visual">
+<title>Classroom · School of Communicators</title>
+<style>
+:root{--navy:#0b2a5b;--blue:#143d78;--soft:#e8f0fe;--ink:#1a2238;--mut:#5b6785}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:#0b1220;font-family:Roboto,system-ui,sans-serif;color:var(--ink)}
+button{font-family:inherit}
+.hide{display:none!important}
+
+/* lobby */
+#lobby{position:fixed;inset:0;overflow:auto;background:#eef2f8}
+#lobby .top{background:#071d3d;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+#lobby .top a{color:#fff;border:1px solid #fff5;border-radius:8px;padding:6px 10px;text-decoration:none;font-size:14px}
+.wrap{max-width:720px;margin:0 auto;padding:12px}
+.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px #0001}
+h2{font-size:18px;color:var(--navy);margin:0 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.p{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:15px}
+.s{background:var(--soft);color:var(--navy);border:0;border-radius:10px;padding:9px 12px;font-size:14px}
+.d{background:#fde8e8;color:#b42318;border:0;border-radius:10px;padding:9px 12px;font-size:14px}
+.note{color:var(--mut);font-size:14px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;background:#f6f8fc;border-radius:12px;margin-bottom:8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#b8c0d4;margin-right:8px}
+.dot.on{background:#12b76a}
+input[type=text]{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0}
+select{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0;background:#fff}
+
+/* classroom */
+#app{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:#0b1220}
+#stage{position:relative;flex:1;min-height:0;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.fab{position:absolute;top:10px;z-index:5;border:0;border-radius:12px;padding:9px 14px;font-size:14px;font-weight:600;background:rgba(15,23,42,.82);color:#fff}
+#exitBtn{left:10px}
+#menuBtn{right:10px}
+#topic{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;max-width:44vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700}
+#callbar{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:6px;align-items:center;background:rgba(15,23,42,.92);color:#fff;border-radius:18px;padding:6px 8px 6px 14px;font-size:13px;max-width:94vw;flex-wrap:wrap;justify-content:center}
+#callbar button{border:0;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+#tools{position:absolute;left:10px;right:10px;bottom:10px;z-index:5;display:flex;gap:6px;align-items:center;overflow-x:auto;background:rgba(15,23,42,.86);border-radius:16px;padding:8px}
+#tools button{flex:none;border:0;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600;background:#243049;color:#fff}
+#tools button.on{background:#2563eb}
+#tools .cdot{width:28px;height:28px;border-radius:50%;border:3px solid transparent;padding:0}
+#tools .cdot.sel{border-color:#fff}
+#pager{flex:none;display:flex;align-items:center;gap:6px;color:#fff;font-size:13px}
+#pad{flex:none;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none;border-top:2px solid #1e293b}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(90vw,360px);background:#fff;z-index:20;overflow:auto;padding:14px;box-shadow:-6px 0 20px #0005}
+#drawer h3{margin:16px 0 8px;font-size:15px;color:var(--navy)}
+#drawer .dh{display:flex;justify-content:space-between;align-items:center}
+#ring{position:fixed;inset:0;background:#071d3df2;color:#fff;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
+#ring h2{color:#fff;font-size:28px;margin:0}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:12px;z-index:60;font-size:14px;max-width:86vw;text-align:center}
+#kb{position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0;resize:none}
+label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
+</style>
+</head>
+<body>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="top"><b>Classroom</b><a href="home.html">Back</a></div>
+  <div class="wrap">
+    <p id="lobbyMsg" class="note">Loading…</p>
+    <div id="blocked" class="card hide">
+      <h2>Classes locked</h2>
+      <p>Your tuition is not up to date, so the classroom and your saved classes are locked. When your payment is recorded, access opens again automatically.</p>
+    </div>
+    <div id="tLobby" class="card hide">
+      <h2>Students</h2>
+      <div id="stus" class="note">No student has opened the platform yet.</div>
+    </div>
+    <div id="sLobby" class="card hide">
+      <h2>Your teacher</h2>
+      <div class="row"><button class="p" id="callT">Call teacher</button><button class="s" id="myRoom">Open my room</button></div>
+      <p class="note">Allow the microphone when asked.</p>
+    </div>
+  </div>
+</div>
+
+<!-- CLASSROOM -->
+<div id="app" class="hide">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <button class="fab" id="exitBtn">Exit</button>
+    <div id="topic" class="hide"></div>
+    <button class="fab" id="menuBtn">Menu</button>
+    <div id="callbar" class="hide">
+      <span id="callTxt"></span>
+      <button id="fbBtn" class="hide" style="background:#f59e0b;color:#111">Use backup call</button>
+      <button id="muteBtn" class="hide" style="background:#334155;color:#fff">Mute</button>
+      <button id="endBtn" style="background:#dc2626;color:#fff">End</button>
+    </div>
+    <div id="tools">
+      <button id="mPen">Pen</button>
+      <button id="mText">Text</button>
+      <button id="mEra">Eraser</button>
+      <button id="mPtr" class="hide">Pointer</button>
+      <span id="cols" style="display:flex;gap:6px"></span>
+      <button id="szBtn">Size M</button>
+      <button id="undo">Undo</button>
+      <button id="zoomReset" class="hide">1×</button>
+      <button id="doneTxt" class="hide">Done</button>
+      <span id="pager" class="hide"><button id="prev">‹</button><span id="pg"></span><button id="next">›</button></span>
+    </div>
+  </div>
+  <div id="pad" class="hide">Move your finger here to point on the board</div>
+</div>
+
+<!-- MENU -->
+<div id="drawer" class="hide">
+  <div class="dh"><b id="dTitle">Menu</b><button class="s" id="dClose">Close</button></div>
+
+  <h3>Call</h3>
+  <div class="row">
+    <button class="p" id="dCall">Call</button>
+    <button class="s" id="dBackup">Backup call</button>
+  </div>
+  <p class="note">Backup call opens a voice call in a new tab, with no time limit.</p>
+
+  <div id="dTeacher" class="hide">
+    <h3>Lesson topic</h3>
+    <input type="text" id="topicIn" maxlength="80" placeholder="e.g. Verb to be" autocomplete="off">
+    <div class="row"><button class="p" id="topicSet">Set topic</button></div>
+
+    <h3>Save this class</h3>
+    <select id="visSel"><option value="one">For this student</option><option value="all">For all students</option></select>
+    <label class="t"><input type="checkbox" id="incDoc" checked> Attach the board document</label>
+    <label class="t"><input type="checkbox" id="incInk" checked> Include what I wrote</label>
+    <div class="row"><button class="p" id="saveClass">Save class</button></div>
+    <p class="note" id="classStat"></p>
+    <div id="classList"></div>
+
+    <h3>Board</h3>
+    <div class="row">
+      <button class="s" id="thWhite">White board</button>
+      <button class="s" id="thBlack">Black board</button>
+    </div>
+    <label class="t"><input type="checkbox" id="allowD"> Student can write</label>
+    <div class="row">
+      <button class="s" id="upPdf">Upload PDF</button>
+      <button class="s" id="blank">New blank board</button>
+      <button class="s" id="fit">Fit board to my screen</button>
+      <button class="d" id="clr">Clear page</button>
+    </div>
+    <p class="note" id="pdfStat"></p>
+
+    <h3>Students online</h3>
+    <div id="dStus" class="note"></div>
+  </div>
+</div>
+
+<div id="ring" class="hide">
+  <div style="font-size:18px;opacity:.85">Incoming call</div>
+  <h2 id="ringName"></h2>
+  <div class="row" style="justify-content:center;gap:16px">
+    <button class="d" id="dec" style="padding:14px 22px;font-size:17px">Decline</button>
+    <button class="p" id="acc" style="padding:14px 22px;font-size:17px;background:#12805c">Answer</button>
+  </div>
+</div>
+<div id="toast" class="hide"></div>
+<audio id="rau" autoplay playsinline></audio>
+<textarea id="kb" autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
+<input type="file" id="pdfIn" accept="application/pdf" class="hide">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
+  authDomain: "school-of-communicators.firebaseapp.com",
+  projectId: "school-of-communicators",
+  storageBucket: "school-of-communicators.firebasestorage.app",
+  messagingSenderId: "601098815550",
+  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
+  measurementId: "G-45TQ4JWK8V"
+};
+const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
+const JITSI_DOMAIN = 'meet.jit.si', JITSI_PREFIX = 'SchoolOfCommunicators-';
+/* optional free TURN relay (metered.ca). Makes voice calls work on mobile data. */
+const METERED_APP = '';
+const METERED_KEY = '';
+const MAX_PDF_PAGES = 40;
+const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const COLORS = ['ink', '#e11d48', '#16a34a', '#f59e0b', '#0ea5e9'];
+const PEN = [0.003, 0.0055, 0.009], TXT = [0.03, 0.045, 0.07], SZN = ['S', 'M', 'L'];
+const MAX_ZOOM = 12;
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth(), db = firebase.firestore();
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const newId = () => db.collection('x').doc().id;
+const roomsCol = () => db.collection('salas');
+
+let user, isT = false, blocked = false, roomId = null, room = {}, items = [], curPage = 0, imgCache = {}, unsubs = [];
+let mode = 'pen', color = 'ink', sizeIdx = 1, editing = null, textTimer = 0;
+let view = { s: 1, tx: 0, ty: 0 }, lastViewT = 0;
+let stageW = 0, stageH = 0, dpr = 1, baseH = innerHeight, kbH = 0;
+let ptr = { x: 0.5, y: 0.5, on: false }, rptr = null;
+let eraserPos = null;
+const gone = new Set();
+const erasePending = new Map();   /* id -> new paths (or null = delete), waiting to be saved */
+const eraseMem = new Map();       /* id -> { paths, until }: keeps the erased look until the server catches up */
 let eraseSaveTimer = null;
+let autoAnswer = new URLSearchParams(location.search).get('answer') === '1';
 
+const cv = $('cv'), ctx = cv.getContext('2d');
+const nameOf = () => user.displayName || (user.email || 'Student').split('@')[0];
+const canWrite = () => isT || room.studentsCanDraw === true;
+const screenRatio = () => innerWidth / Math.max(300, baseH);
+const isDarkBg = () => room.theme === 'black' && room.mode !== 'pdf';
 
-// SUBSTITUA A FUNÇÃO drawItem() POR ESTA
-function drawItem(ctx, it, x0, y0, pw, ph) {
-  if (it.type !== 'stroke') {
-    // Mantenha aqui o desenho original dos outros elementos.
-    return;
-  }
-
-  const paths = it.paths || (it.pts ? [it.pts] : []);
-
-  ctx.save();
-  ctx.strokeStyle = it.color || '#000000';
-  ctx.lineWidth = it.size || 2;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  for (const pts of paths) {
-    if (!pts || pts.length < 4) continue;
-
-    ctx.beginPath();
-    ctx.moveTo(x0 + pts[0] * pw, y0 + pts[1] * ph);
-
-    for (let i = 2; i + 1 < pts.length; i += 2) {
-      ctx.lineTo(x0 + pts[i] * pw, y0 + pts[i + 1] * ph);
-    }
-
-    ctx.stroke();
-  }
-
-  ctx.restore();
+function toast(m) {
+  const t = $('toast'); t.textContent = m; t.classList.remove('hide');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hide'), 3200);
 }
 
-
-// ADICIONE ESTAS FUNÇÕES
-function eraseStrokePaths(it, x, y, x0, y0, pw, ph, radius) {
-  const source = it.paths || (it.pts ? [it.pts] : []);
-  const limit = radius + Math.max(1, ((it.size || 2) * pw) / 2);
-  const result = [];
-
-  for (const path of source) {
-    if (!path || path.length < 4) continue;
-
-    let current = [];
-
-    const flush = () => {
-      if (current.length >= 4) result.push(current);
-      current = [];
-    };
-
-    for (let i = 0; i + 3 < path.length; i += 2) {
-      const ax = x0 + path[i] * pw;
-      const ay = y0 + path[i + 1] * ph;
-      const bx = x0 + path[i + 2] * pw;
-      const by = y0 + path[i + 3] * ph;
-
-      const distance = Math.hypot(bx - ax, by - ay);
-      const steps = Math.max(1, Math.ceil(distance / 3));
-
-      for (let j = 0; j <= steps; j++) {
-        const t = j / steps;
-
-        const sx = ax + (bx - ax) * t;
-        const sy = ay + (by - ay) * t;
-
-        const nx = path[i] + (path[i + 2] - path[i]) * t;
-        const ny = path[i + 1] + (path[i + 3] - path[i + 1]) * t;
-
-        if (Math.hypot(sx - x, sy - y) > limit) {
-          if (
-            current.length === 0 ||
-            Math.hypot(
-              current[current.length - 2] - nx,
-              current[current.length - 1] - ny
-            ) > 0.00001
-          ) {
-            current.push(nx, ny);
-          }
-        } else {
-          flush();
-        }
-      }
-    }
-
-    flush();
-  }
-
-  return result;
+/* ================= AUTH + ACCESS + LOBBY ================= */
+async function checkAccess() {
+  const d = await db.collection('members').doc(user.uid).get();
+  const m = d.exists ? d.data() : {};
+  const now = new Date(), cur = now.getFullYear() * 12 + now.getMonth(), acc = m.access || 'auto';
+  blocked = !(acc === 'open' || (acc === 'auto' && (m.paidUntil || 0) >= cur));
 }
+auth.onAuthStateChanged(async u => {
+  if (!u) { $('lobbyMsg').innerHTML = 'Please <a href="index.html">log in</a> first.'; return; }
+  user = u; isT = (u.email || '').toLowerCase() === TEACHER_EMAIL;
+  $('lobbyMsg').classList.add('hide');
+  if (!isT) { try { await checkAccess(); } catch (e) { blocked = true; } }
+  $('tLobby').classList.toggle('hide', !isT);
+  $('sLobby').classList.toggle('hide', isT || blocked);
+  $('blocked').classList.toggle('hide', !blocked);
+  if (isT) loadStudents(); else { beat(); setInterval(beat, 30000); }
+  if (blocked) return;
+  listenCalls();
+  const id = new URLSearchParams(location.search).get('sala');
+  if (id) enterRoom(id);
+});
 
-
-function queueEraseSave(id, paths) {
-  erasePending.set(id, paths);
-
-  clearTimeout(eraseSaveTimer);
-  eraseSaveTimer = setTimeout(flushEraseSaves, 150);
+const beat = () => db.collection('alunos').doc(user.uid).set({ name: nameOf(), email: user.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
+let students = [];
+function loadStudents() {
+  db.collection('alunos').onSnapshot(s => {
+    students = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    renderStudents(); renderDrawerStudents();
+  });
+  setInterval(() => { renderStudents(); renderDrawerStudents(); }, 20000);
 }
-
-
-async function flushEraseSaves() {
-  clearTimeout(eraseSaveTimer);
-  eraseSaveTimer = null;
-
-  if (!roomId || erasePending.size === 0) return;
-
-  const pending = new Map(erasePending);
-  erasePending.clear();
-
-  try {
-    const batch = db.batch();
-    const strokesRef = roomsCol().doc(roomId).collection('strokes');
-
-    for (const [id, paths] of pending) {
-      const ref = strokesRef.doc(id);
-
-      if (paths === null) {
-        batch.delete(ref);
-      } else {
-        batch.update(ref, {
-          paths,
-          pts: firebase.firestore.FieldValue.delete()
-        });
-      }
-    }
-
-    await batch.commit();
-  } catch (error) {
-    console.error('Erro ao guardar apagamento:', error);
-
-    for (const [id, paths] of pending) {
-      if (!erasePending.has(id)) erasePending.set(id, paths);
-    }
-
-    showToast?.('Não foi possível guardar o apagamento.');
-  }
-}
-
-
-// SUBSTITUA A FUNÇÃO eraseAt() POR ESTA
-function eraseAt(x, y) {
-  const rect = canvas.getBoundingClientRect();
-  const x0 = rect.left;
-  const y0 = rect.top;
-  const pw = rect.width;
-  const ph = rect.height;
-  const radius = 20;
-
-  let changed = false;
-
-  items = items.map(it => {
-    if (
-      it.page !== page ||
-      (!isT && it.uid !== user.uid)
-    ) {
-      return it;
-    }
-
-    if (it.type === 'stroke') {
-      const oldPaths = it.paths || (it.pts ? [it.pts] : []);
-
-      const newPaths = eraseStrokePaths(
-        it, x, y, x0, y0, pw, ph, radius
-      );
-
-      if (JSON.stringify(oldPaths) === JSON.stringify(newPaths)) {
-        return it;
-      }
-
-      changed = true;
-
-      if (newPaths.length === 0) {
-        gone.add(it.id);
-        queueEraseSave(it.id, null);
-        return null;
-      }
-
-      queueEraseSave(it.id, newPaths);
-
-      const updated = { ...it, paths: newPaths };
-      delete updated.pts;
-
-      return updated;
-    }
-
-    // Textos e outros elementos continuam a ser apagados por inteiro.
-    if (hitItem(it, x, y, x0, y0, pw, ph)) {
-      changed = true;
-      gone.add(it.id);
-      queueEraseSave(it.id, null);
-      return null;
-    }
-
-    return it;
-  }).filter(Boolean);
-
-  if (changed) redraw();
-}
-
-
-// NO onSnapshot DAS STROKES, SUBSTITUA A ATRIBUIÇÃO DE items POR:
-items = s.docs
-  .map(d => ({ id: d.id, ...d.data() }))
-  .filter(it => !gone.has(it.id))
-  .map(it => {
-    if (!erasePending.has(it.id)) return it;
-
-    const pendingPaths = erasePending.get(it.id);
-
-    if (pendingPaths === null) return null;
-
-    const updated = { ...it, paths: pendingPaths };
-    delete updated.pts;
-
-    return updated;
-  })
-  .filter(Boolean);
-
-
-// NA FUNÇÃO pointerEnd(), ADICIONE:
-flushEraseSaves();
+const isOnline = st => Date.now() - (st.seen || 0) < 75000;
+function studentRows(el, closeDrawer) {
+  if (!students.length) return;
+  el.innerHTML = '';
+  [...students].sort((a, b) => isOnline(b) - isOnline(a)).forEach(st => {
+    const row = document.createElement('div'); row.className = 'item';
+    row.innerHTML = '<span><span class="dot' + (isOnline(st) ? ' on' : '') + '"></span><b>' + esc(st.name || st.email || '') + '</b></span><span>

@@ -1,1006 +1,223 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-visual">
-<title>Classroom · School of Communicators</title>
-<style>
-:root{--navy:#0b2a5b;--blue:#143d78;--soft:#e8f0fe;--ink:#1a2238;--mut:#5b6785}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:#0b1220;font-family:Roboto,system-ui,sans-serif;color:var(--ink)}
-button{font-family:inherit}
-.hide{display:none!important}
+// ADICIONE JUNTO DAS VARIÁVEIS GLOBAIS
+const erasePending = new Map();
+let eraseSaveTimer = null;
 
-/* lobby */
-#lobby{position:fixed;inset:0;overflow:auto;background:#eef2f8}
-#lobby .top{background:#071d3d;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
-#lobby .top a{color:#fff;border:1px solid #fff5;border-radius:8px;padding:6px 10px;text-decoration:none;font-size:14px}
-.wrap{max-width:720px;margin:0 auto;padding:12px}
-.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px #0001}
-h2{font-size:18px;color:var(--navy);margin:0 0 10px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
-.p{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:15px}
-.s{background:var(--soft);color:var(--navy);border:0;border-radius:10px;padding:9px 12px;font-size:14px}
-.d{background:#fde8e8;color:#b42318;border:0;border-radius:10px;padding:9px 12px;font-size:14px}
-.note{color:var(--mut);font-size:14px}
-.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;background:#f6f8fc;border-radius:12px;margin-bottom:8px}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#b8c0d4;margin-right:8px}
-.dot.on{background:#12b76a}
-input[type=text]{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0}
-select{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0;background:#fff}
 
-/* classroom */
-#app{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:#0b1220}
-#stage{position:relative;flex:1;min-height:0;overflow:hidden}
-#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-.fab{position:absolute;top:10px;z-index:5;border:0;border-radius:12px;padding:9px 14px;font-size:14px;font-weight:600;background:rgba(15,23,42,.82);color:#fff}
-#exitBtn{left:10px}
-#menuBtn{right:10px}
-#topic{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;max-width:44vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700}
-#callbar{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:6px;align-items:center;background:rgba(15,23,42,.92);color:#fff;border-radius:18px;padding:6px 8px 6px 14px;font-size:13px;max-width:94vw;flex-wrap:wrap;justify-content:center}
-#callbar button{border:0;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
-#tools{position:absolute;left:10px;right:10px;bottom:10px;z-index:5;display:flex;gap:6px;align-items:center;overflow-x:auto;background:rgba(15,23,42,.86);border-radius:16px;padding:8px}
-#tools button{flex:none;border:0;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600;background:#243049;color:#fff}
-#tools button.on{background:#2563eb}
-#tools .cdot{width:28px;height:28px;border-radius:50%;border:3px solid transparent;padding:0}
-#tools .cdot.sel{border-color:#fff}
-#pager{flex:none;display:flex;align-items:center;gap:6px;color:#fff;font-size:13px}
-#pad{flex:none;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none;border-top:2px solid #1e293b}
-#drawer{position:fixed;top:0;right:0;bottom:0;width:min(90vw,360px);background:#fff;z-index:20;overflow:auto;padding:14px;box-shadow:-6px 0 20px #0005}
-#drawer h3{margin:16px 0 8px;font-size:15px;color:var(--navy)}
-#drawer .dh{display:flex;justify-content:space-between;align-items:center}
-#ring{position:fixed;inset:0;background:#071d3df2;color:#fff;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
-#ring h2{color:#fff;font-size:28px;margin:0}
-#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:12px;z-index:60;font-size:14px;max-width:86vw;text-align:center}
-#kb{position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0;resize:none}
-label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
-</style>
-</head>
-<body>
-
-<!-- LOBBY -->
-<div id="lobby">
-  <div class="top"><b>Classroom</b><a href="home.html">Back</a></div>
-  <div class="wrap">
-    <p id="lobbyMsg" class="note">Loading…</p>
-    <div id="blocked" class="card hide">
-      <h2>Classes locked</h2>
-      <p>Your tuition is not up to date, so the classroom and your saved classes are locked. When your payment is recorded, access opens again automatically.</p>
-    </div>
-    <div id="tLobby" class="card hide">
-      <h2>Students</h2>
-      <div id="stus" class="note">No student has opened the platform yet.</div>
-    </div>
-    <div id="sLobby" class="card hide">
-      <h2>Your teacher</h2>
-      <div class="row"><button class="p" id="callT">Call teacher</button><button class="s" id="myRoom">Open my room</button></div>
-      <p class="note">Allow the microphone when asked.</p>
-    </div>
-  </div>
-</div>
-
-<!-- CLASSROOM -->
-<div id="app" class="hide">
-  <div id="stage">
-    <canvas id="cv"></canvas>
-    <button class="fab" id="exitBtn">Exit</button>
-    <div id="topic" class="hide"></div>
-    <button class="fab" id="menuBtn">Menu</button>
-    <div id="callbar" class="hide">
-      <span id="callTxt"></span>
-      <button id="fbBtn" class="hide" style="background:#f59e0b;color:#111">Use backup call</button>
-      <button id="muteBtn" class="hide" style="background:#334155;color:#fff">Mute</button>
-      <button id="endBtn" style="background:#dc2626;color:#fff">End</button>
-    </div>
-    <div id="tools">
-      <button id="mPen">Pen</button>
-      <button id="mText">Text</button>
-      <button id="mEra">Eraser</button>
-      <button id="mPtr" class="hide">Pointer</button>
-      <span id="cols" style="display:flex;gap:6px"></span>
-      <button id="szBtn">Size M</button>
-      <button id="undo">Undo</button>
-      <button id="zoomReset" class="hide">1×</button>
-      <button id="doneTxt" class="hide">Done</button>
-      <span id="pager" class="hide"><button id="prev">‹</button><span id="pg"></span><button id="next">›</button></span>
-    </div>
-  </div>
-  <div id="pad" class="hide">Move your finger here to point on the board</div>
-</div>
-
-<!-- MENU -->
-<div id="drawer" class="hide">
-  <div class="dh"><b id="dTitle">Menu</b><button class="s" id="dClose">Close</button></div>
-
-  <h3>Call</h3>
-  <div class="row">
-    <button class="p" id="dCall">Call</button>
-    <button class="s" id="dBackup">Backup call</button>
-  </div>
-  <p class="note">Backup call opens a voice call in a new tab, with no time limit.</p>
-
-  <div id="dTeacher" class="hide">
-    <h3>Lesson topic</h3>
-    <input type="text" id="topicIn" maxlength="80" placeholder="e.g. Verb to be" autocomplete="off">
-    <div class="row"><button class="p" id="topicSet">Set topic</button></div>
-
-    <h3>Save this class</h3>
-    <select id="visSel"><option value="one">For this student</option><option value="all">For all students</option></select>
-    <label class="t"><input type="checkbox" id="incDoc" checked> Attach the board document</label>
-    <label class="t"><input type="checkbox" id="incInk" checked> Include what I wrote</label>
-    <div class="row"><button class="p" id="saveClass">Save class</button></div>
-    <p class="note" id="classStat"></p>
-    <div id="classList"></div>
-
-    <h3>Board</h3>
-    <div class="row">
-      <button class="s" id="thWhite">White board</button>
-      <button class="s" id="thBlack">Black board</button>
-    </div>
-    <label class="t"><input type="checkbox" id="allowD"> Student can write</label>
-    <div class="row">
-      <button class="s" id="upPdf">Upload PDF</button>
-      <button class="s" id="blank">New blank board</button>
-      <button class="s" id="fit">Fit board to my screen</button>
-      <button class="d" id="clr">Clear page</button>
-    </div>
-    <p class="note" id="pdfStat"></p>
-
-    <h3>Students online</h3>
-    <div id="dStus" class="note"></div>
-  </div>
-</div>
-
-<div id="ring" class="hide">
-  <div style="font-size:18px;opacity:.85">Incoming call</div>
-  <h2 id="ringName"></h2>
-  <div class="row" style="justify-content:center;gap:16px">
-    <button class="d" id="dec" style="padding:14px 22px;font-size:17px">Decline</button>
-    <button class="p" id="acc" style="padding:14px 22px;font-size:17px;background:#12805c">Answer</button>
-  </div>
-</div>
-<div id="toast" class="hide"></div>
-<audio id="rau" autoplay playsinline></audio>
-<textarea id="kb" autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
-<input type="file" id="pdfIn" accept="application/pdf" class="hide">
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDuRlsZ_W0go3KwcA74cMN0VthnYxmHEYs",
-  authDomain: "school-of-communicators.firebaseapp.com",
-  projectId: "school-of-communicators",
-  storageBucket: "school-of-communicators.firebasestorage.app",
-  messagingSenderId: "601098815550",
-  appId: "1:601098815550:web:b8c0f6a59a9835e6e4a96f",
-  measurementId: "G-45TQ4JWK8V"
-};
-const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
-const JITSI_DOMAIN = 'meet.jit.si', JITSI_PREFIX = 'SchoolOfCommunicators-';
-/* optional free TURN relay (metered.ca). Makes voice calls work on mobile data. */
-const METERED_APP = '';
-const METERED_KEY = '';
-const MAX_PDF_PAGES = 40;
-const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-const COLORS = ['ink', '#e11d48', '#16a34a', '#f59e0b', '#0ea5e9'];
-const PEN = [0.003, 0.0055, 0.009], TXT = [0.03, 0.045, 0.07], SZN = ['S', 'M', 'L'];
-const MAX_ZOOM = 12;
-
-firebase.initializeApp(FIREBASE_CONFIG);
-const auth = firebase.auth(), db = firebase.firestore();
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const newId = () => db.collection('x').doc().id;
-const roomsCol = () => db.collection('salas');
-
-let user, isT = false, blocked = false, roomId = null, room = {}, items = [], curPage = 0, imgCache = {}, unsubs = [];
-let mode = 'pen', color = 'ink', sizeIdx = 1, editing = null, textTimer = 0;
-let view = { s: 1, tx: 0, ty: 0 }, lastViewT = 0;
-let stageW = 0, stageH = 0, dpr = 1, baseH = innerHeight, kbH = 0;
-let ptr = { x: 0.5, y: 0.5, on: false }, rptr = null;
-let eraserPos = null;
-const gone = new Set();
-let autoAnswer = new URLSearchParams(location.search).get('answer') === '1';
-
-const cv = $('cv'), ctx = cv.getContext('2d');
-const nameOf = () => user.displayName || (user.email || 'Student').split('@')[0];
-const canWrite = () => isT || room.studentsCanDraw === true;
-const screenRatio = () => innerWidth / Math.max(300, baseH);
-const isDarkBg = () => room.theme === 'black' && room.mode !== 'pdf';
-
-function toast(m) {
-  const t = $('toast'); t.textContent = m; t.classList.remove('hide');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hide'), 3200);
-}
-
-/* ================= AUTH + ACCESS + LOBBY ================= */
-async function checkAccess() {
-  const d = await db.collection('members').doc(user.uid).get();
-  const m = d.exists ? d.data() : {};
-  const now = new Date(), cur = now.getFullYear() * 12 + now.getMonth(), acc = m.access || 'auto';
-  blocked = !(acc === 'open' || (acc === 'auto' && (m.paidUntil || 0) >= cur));
-}
-auth.onAuthStateChanged(async u => {
-  if (!u) { $('lobbyMsg').innerHTML = 'Please <a href="index.html">log in</a> first.'; return; }
-  user = u; isT = (u.email || '').toLowerCase() === TEACHER_EMAIL;
-  $('lobbyMsg').classList.add('hide');
-  if (!isT) { try { await checkAccess(); } catch (e) { blocked = true; } }
-  $('tLobby').classList.toggle('hide', !isT);
-  $('sLobby').classList.toggle('hide', isT || blocked);
-  $('blocked').classList.toggle('hide', !blocked);
-  if (isT) loadStudents(); else { beat(); setInterval(beat, 30000); }
-  if (blocked) return;
-  listenCalls();
-  const id = new URLSearchParams(location.search).get('sala');
-  if (id) enterRoom(id);
-});
-
-const beat = () => db.collection('alunos').doc(user.uid).set({ name: nameOf(), email: user.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
-let students = [];
-function loadStudents() {
-  db.collection('alunos').onSnapshot(s => {
-    students = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    renderStudents(); renderDrawerStudents();
-  });
-  setInterval(() => { renderStudents(); renderDrawerStudents(); }, 20000);
-}
-const isOnline = st => Date.now() - (st.seen || 0) < 75000;
-function studentRows(el, closeDrawer) {
-  if (!students.length) return;
-  el.innerHTML = '';
-  [...students].sort((a, b) => isOnline(b) - isOnline(a)).forEach(st => {
-    const row = document.createElement('div'); row.className = 'item';
-    row.innerHTML = '<span><span class="dot' + (isOnline(st) ? ' on' : '') + '"></span><b>' + esc(st.name || st.email || '') + '</b></span><span></span>';
-    const sp = row.lastChild;
-    const o = document.createElement('button'); o.className = 's'; o.textContent = 'Open';
-    o.onclick = async () => { await ensureDm(st.uid, st.name); if (closeDrawer) closeMenu(); enterRoom('dm_' + st.uid); };
-    const c = document.createElement('button'); c.className = 'p'; c.style.marginLeft = '6px'; c.textContent = 'Call';
-    c.onclick = async () => { await ensureDm(st.uid, st.name); if (closeDrawer) closeMenu(); await enterRoom('dm_' + st.uid); startCall(st.uid, 'dm_' + st.uid, st.name); };
-    sp.appendChild(o); sp.appendChild(c);
-    el.appendChild(row);
-  });
-}
-const renderStudents = () => studentRows($('stus'), false);
-const renderDrawerStudents = () => { if (!$('drawer').classList.contains('hide')) studentRows($('dStus'), true); };
-
-async function ensureDm(uid, name) {
-  const ref = roomsCol().doc('dm_' + uid), d = await ref.get();
-  if (!d.exists) await ref.set({ name: name || 'Student', open: false, dm: uid, theme: 'white', studentsCanDraw: false, mode: 'blank', page: 0, pages: 1, ratio: screenRatio(), topic: '', createdBy: user.uid, t: Date.now() });
-}
-$('callT').onclick = () => startCall('teacher', 'dm_' + user.uid, 'your teacher');
-$('myRoom').onclick = () => enterRoom('dm_' + user.uid);
-
-/* ================= ROOM ================= */
-async function enterRoom(id) {
-  if (blocked) { toast('Classes are locked until your tuition is paid.'); return; }
-  unsubs.forEach(u => u()); unsubs = [];
-  roomId = id; items = []; imgCache = {}; curPage = 0; room = {}; editing = null; lastViewT = 0; gone.clear(); eraserPos = null;
-  view = { s: 1, tx: 0, ty: 0 };
-  $('lobby').classList.add('hide'); $('app').classList.remove('hide');
-  mode = 'pen';
-  relayout(); updateTools(); renderDrawer();
-  const ref = roomsCol().doc(id);
-  const onErr = err => {
-    if (err && err.code === 'permission-denied') { blocked = !isT; toast('Access to this room is locked.'); exitToLobby(true); }
-  };
-  unsubs.push(ref.onSnapshot(s => {
-    if (!s.exists) { toast('This room is not open yet. Ask your teacher.'); exitToLobby(true); return; }
-    room = s.data();
-    if (!isT) curPage = room.page || 0;
-    if (!isT && room.pointer && Date.now() - room.pointer.t < 2500 && !(dc && dc.readyState === 'open')) setRemotePtr(room.pointer);
-    if (!isT && room.view && room.view.t !== lastViewT && pts.size === 0) { lastViewT = room.view.t; applyView(room.view); }
-    $('allowD').checked = room.studentsCanDraw === true;
-    $('topic').textContent = room.topic || ''; $('topic').classList.toggle('hide', !room.topic);
-    if (isT && document.activeElement !== $('topicIn')) $('topicIn').value = room.topic || '';
-    if (!canWrite() && (mode === 'pen' || mode === 'text' || mode === 'erase')) mode = isT ? 'pen' : 'view';
-    updateTools(); renderDrawer(); loadBg(); draw();
-  }, onErr));
-  unsubs.push(ref.collection('strokes').orderBy('t').onSnapshot(s => {
-    items = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => !gone.has(i.id)); draw();
-  }, onErr));
-}
-function exitToLobby(silent) {
-  if (!silent && pc && !confirm('Leave the room and end the call?')) return;
-  if (pc) hangup();
-  unsubs.forEach(u => u()); unsubs = []; roomId = null; editing = null;
-  closeMenu(); $('app').classList.add('hide'); $('lobby').classList.remove('hide');
-  $('sLobby').classList.toggle('hide', isT || blocked); $('blocked').classList.toggle('hide', !blocked);
-  history.replaceState(null, '', location.pathname);
-}
-$('exitBtn').onclick = () => exitToLobby(false);
-
-/* ================= VIEWPORT: the board fills what the keyboard leaves ================= */
-function relayout() {
-  const vv = window.visualViewport;
-  const h = vv ? vv.height : innerHeight;
-  baseH = Math.max(baseH, h, innerHeight);
-  const app = $('app');
-  app.style.height = h + 'px'; app.style.top = (vv ? vv.offsetTop : 0) + 'px';
-  if (baseH - h > 120) kbH = baseH - h;
-  const showPad = mode === 'pointer' && isT;
-  const padH = showPad ? clamp(kbH || Math.round(baseH * 0.38), 200, Math.round(baseH * 0.5)) : 0;
-  $('pad').style.height = padH + 'px'; $('pad').classList.toggle('hide', !showPad);
-  requestAnimationFrame(resizeCanvas);
-}
-function resizeCanvas() {
-  const r = $('stage').getBoundingClientRect();
-  stageW = r.width; stageH = r.height; dpr = window.devicePixelRatio || 1;
-  cv.width = Math.round(stageW * dpr); cv.height = Math.round(stageH * dpr);
-  if (!isT && room.view) applyView(room.view);
-  clampView(); draw();
-}
-if (window.visualViewport) { visualViewport.addEventListener('resize', relayout); visualViewport.addEventListener('scroll', relayout); }
-addEventListener('resize', relayout);
-
-/* ================= GEOMETRY + SHARED ZOOM ================= */
-function geom() {
-  const r = room.ratio || (stageW / Math.max(1, stageH));
-  const pw = Math.min(stageW, stageH * r);
-  return { w: stageW, h: stageH, pw, ph: pw / r };
-}
-function toPage(x, y) { const g = geom(); return [(x - g.w / 2 - view.tx) / (g.pw * view.s) + 0.5, (y - g.h / 2 - view.ty) / (g.ph * view.s) + 0.5]; }
-function clampView() {
-  const g = geom(), mx = Math.max(0, (g.pw * view.s - g.w) / 2) + g.w * 0.3, my = Math.max(0, (g.ph * view.s - g.h) / 2) + g.h * 0.3;
-  view.tx = clamp(view.tx, -mx, mx); view.ty = clamp(view.ty, -my, my);
-}
-function applyView(v) {
-  if (!v || !stageW) return;
-  const g = geom(), s = clamp(v.s || 1, 1, MAX_ZOOM);
-  view.s = s;
-  view.tx = -((v.x == null ? 0.5 : v.x) - 0.5) * g.pw * s;
-  view.ty = -((v.y == null ? 0.5 : v.y) - 0.5) * g.ph * s;
-  clampView(); draw();
-}
-let pushTimer = 0, viewDirty = false;
-function pushView(now) {
-  if (!isT || !roomId) return;
-  const run = () => {
-    pushTimer = 0;
-    const c = toPage(stageW / 2, stageH / 2);
-    roomsCol().doc(roomId).update({ view: { s: +view.s.toFixed(3), x: +c[0].toFixed(4), y: +c[1].toFixed(4), t: Date.now() } }).catch(() => {});
-  };
-  if (now) { clearTimeout(pushTimer); run(); } else if (!pushTimer) pushTimer = setTimeout(run, 250);
-}
-const resetViewDoc = () => ({ view: { s: 1, x: 0.5, y: 0.5, t: Date.now() } });
-$('zoomReset').onclick = () => { view = { s: 1, tx: 0, ty: 0 }; draw(); pushView(true); };
-
-/* ================= RENDER ================= */
-let raf = 0;
-function draw() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; render(); }); }
-const inkColor = c => (c === 'ink' ? (isDarkBg() ? '#f8fafc' : '#111827') : c);
-
-function render() {
-  if (!stageW) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = room.theme === 'black' ? '#05070a' : '#d9dfeb'; ctx.fillRect(0, 0, stageW, stageH);
-  const g = geom(), pw = g.pw * view.s, ph = g.ph * view.s;
-  const x0 = g.w / 2 + view.tx - pw / 2, y0 = g.h / 2 + view.ty - ph / 2;
-  const pdf = room.mode === 'pdf';
-  ctx.fillStyle = pdf ? '#ffffff' : (isDarkBg() ? '#10141b' : '#ffffff'); ctx.fillRect(x0, y0, pw, ph);
-  if (pdf) {
-    const im = imgCache[curPage];
-    if (im) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im, x0, y0, pw, ph); }
-    else { ctx.fillStyle = '#64748b'; ctx.font = '16px ' + FONT; ctx.textAlign = 'center'; ctx.fillText('Loading page…', g.w / 2, g.h / 2); }
-  }
-  items.forEach(it => { if (it.page === curPage && !(editing && editing.id === it.id)) drawItem(it, x0, y0, pw, ph, false); });
-  if (editing && editing.page === curPage) drawItem(editing, x0, y0, pw, ph, true);
-  if (drawing) drawItem(drawing, x0, y0, pw, ph, false);
-  drawPointer(isT ? ptr : rptr, x0, y0, pw, ph);
-  if (eraserPos) {
-    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.fillStyle = 'rgba(239,68,68,.12)';
-    ctx.beginPath(); ctx.arc(eraserPos.x, eraserPos.y, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-}
-
-function drawItem(it, x0, y0, pw, ph, isEdit, c) {
-  const g = c || ctx, col = inkColor(it.color);
-  if (it.kind === 'text') {
-    const px = Math.max(6, it.size * pw);
-    g.font = '500 ' + px + 'px ' + FONT; g.fillStyle = col; g.textAlign = 'left'; g.textBaseline = 'top';
-    const lines = String(it.text || '').split('\n'), lh = px * 1.25;
-    lines.forEach((ln, i) => g.fillText(ln, x0 + it.x * pw, y0 + it.y * ph + i * lh));
-    if (isEdit && Math.floor(Date.now() / 500) % 2 === 0) {
-      const last = lines[lines.length - 1], w = g.measureText(last).width;
-      g.fillRect(x0 + it.x * pw + w + 2, y0 + it.y * ph + (lines.length - 1) * lh, Math.max(2, px * 0.06), px);
-    }
-    g.textBaseline = 'alphabetic';
+// SUBSTITUA A FUNÇÃO drawItem() POR ESTA
+function drawItem(ctx, it, x0, y0, pw, ph) {
+  if (it.type !== 'stroke') {
+    // Mantenha aqui o desenho original dos outros elementos.
     return;
   }
-  const p = it.pts; if (!p || p.length < 2) return;
-  g.strokeStyle = col; g.lineWidth = Math.max(1, it.size * pw); g.lineCap = g.lineJoin = 'round';
-  g.beginPath(); g.moveTo(x0 + p[0] * pw, y0 + p[1] * ph);
-  if (p.length === 2) g.lineTo(x0 + p[0] * pw + 0.1, y0 + p[1] * ph);
-  for (let i = 2; i < p.length; i += 2) g.lineTo(x0 + p[i] * pw, y0 + p[i + 1] * ph);
-  g.stroke();
+
+  const paths = it.paths || (it.pts ? [it.pts] : []);
+
+  ctx.save();
+  ctx.strokeStyle = it.color || '#000000';
+  ctx.lineWidth = it.size || 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const pts of paths) {
+    if (!pts || pts.length < 4) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(x0 + pts[0] * pw, y0 + pts[1] * ph);
+
+    for (let i = 2; i + 1 < pts.length; i += 2) {
+      ctx.lineTo(x0 + pts[i] * pw, y0 + pts[i + 1] * ph);
+    }
+
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
-function drawPointer(p, x0, y0, pw, ph) {
-  if (!p) return;
-  const visible = p.on || (Date.now() - (p.t || 0) < 1500);
-  if (!visible) return;
-  const x = x0 + p.x * pw, y = y0 + p.y * ph;
-  ctx.fillStyle = 'rgba(239,68,68,.25)'; ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ef4444'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-}
-setInterval(() => { if (editing || (rptr && Date.now() - (rptr.t || 0) < 1800) || (isT && ptr.on)) draw(); }, 400);
 
-/* ================= BACKGROUND (PDF pages) ================= */
-async function getPageImg(i) {
-  if (imgCache[i]) return imgCache[i];
-  const rid = roomId;
-  const d = await roomsCol().doc(rid).collection('pages').doc(String(i)).get();
-  if (!d.exists || rid !== roomId) return null;
-  const im = new Image(); im.src = d.data().img;
-  await new Promise(r => { im.onload = r; im.onerror = r; });
-  imgCache[i] = im; return im;
+// ADICIONE ESTAS FUNÇÕES
+function eraseStrokePaths(it, x, y, x0, y0, pw, ph, radius) {
+  const source = it.paths || (it.pts ? [it.pts] : []);
+  const limit = radius + Math.max(1, ((it.size || 2) * pw) / 2);
+  const result = [];
+
+  for (const path of source) {
+    if (!path || path.length < 4) continue;
+
+    let current = [];
+
+    const flush = () => {
+      if (current.length >= 4) result.push(current);
+      current = [];
+    };
+
+    for (let i = 0; i + 3 < path.length; i += 2) {
+      const ax = x0 + path[i] * pw;
+      const ay = y0 + path[i + 1] * ph;
+      const bx = x0 + path[i + 2] * pw;
+      const by = y0 + path[i + 3] * ph;
+
+      const distance = Math.hypot(bx - ax, by - ay);
+      const steps = Math.max(1, Math.ceil(distance / 3));
+
+      for (let j = 0; j <= steps; j++) {
+        const t = j / steps;
+
+        const sx = ax + (bx - ax) * t;
+        const sy = ay + (by - ay) * t;
+
+        const nx = path[i] + (path[i + 2] - path[i]) * t;
+        const ny = path[i + 1] + (path[i + 3] - path[i + 1]) * t;
+
+        if (Math.hypot(sx - x, sy - y) > limit) {
+          if (
+            current.length === 0 ||
+            Math.hypot(
+              current[current.length - 2] - nx,
+              current[current.length - 1] - ny
+            ) > 0.00001
+          ) {
+            current.push(nx, ny);
+          }
+        } else {
+          flush();
+        }
+      }
+    }
+
+    flush();
+  }
+
+  return result;
 }
-async function loadBg() {
-  if (room.mode !== 'pdf' || !roomId) return;
-  const need = [curPage, curPage + 1].filter(n => n < (room.pages || 1) && !imgCache[n]);
-  for (const n of need) {
-    try { await getPageImg(n); if (n === curPage) draw(); } catch (e) { /* ignore */ }
+
+
+function queueEraseSave(id, paths) {
+  erasePending.set(id, paths);
+
+  clearTimeout(eraseSaveTimer);
+  eraseSaveTimer = setTimeout(flushEraseSaves, 150);
+}
+
+
+async function flushEraseSaves() {
+  clearTimeout(eraseSaveTimer);
+  eraseSaveTimer = null;
+
+  if (!roomId || erasePending.size === 0) return;
+
+  const pending = new Map(erasePending);
+  erasePending.clear();
+
+  try {
+    const batch = db.batch();
+    const strokesRef = roomsCol().doc(roomId).collection('strokes');
+
+    for (const [id, paths] of pending) {
+      const ref = strokesRef.doc(id);
+
+      if (paths === null) {
+        batch.delete(ref);
+      } else {
+        batch.update(ref, {
+          paths,
+          pts: firebase.firestore.FieldValue.delete()
+        });
+      }
+    }
+
+    await batch.commit();
+  } catch (error) {
+    console.error('Erro ao guardar apagamento:', error);
+
+    for (const [id, paths] of pending) {
+      if (!erasePending.has(id)) erasePending.set(id, paths);
+    }
+
+    showToast?.('Não foi possível guardar o apagamento.');
   }
 }
 
-/* ================= ERASER: removes strokes and text, never the PDF ================= */
-function segDist(px, py, ax, ay, bx, by) {
-  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
-  let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-}
-function hitItem(it, x, y, x0, y0, pw, ph) {
-  if (it.kind === 'text') {
-    const px = Math.max(6, it.size * pw), lh = px * 1.25;
-    ctx.font = '500 ' + px + 'px ' + FONT;
-    const lines = String(it.text || '').split('\n');
-    const w = Math.max(px, ...lines.map(l => ctx.measureText(l).width));
-    const rx = x0 + it.x * pw, ry = y0 + it.y * ph;
-    return x >= rx - 12 && x <= rx + w + 12 && y >= ry - 12 && y <= ry + lines.length * lh + 12;
-  }
-  const p = it.pts; if (!p || p.length < 2) return false;
-  const r = Math.max(18, it.size * pw / 2 + 14);
-  for (let i = 0; i + 1 < p.length; i += 2) {
-    const ax = x0 + p[i] * pw, ay = y0 + p[i + 1] * ph;
-    const hasNext = i + 3 < p.length;
-    const bx = hasNext ? x0 + p[i + 2] * pw : ax, by = hasNext ? y0 + p[i + 3] * ph : ay;
-    if (segDist(x, y, ax, ay, bx, by) <= r) return true;
-  }
-  return false;
-}
+
+// SUBSTITUA A FUNÇÃO eraseAt() POR ESTA
 function eraseAt(x, y) {
-  eraserPos = { x, y };
-  const g = geom(), pw = g.pw * view.s, ph = g.ph * view.s;
-  const x0 = g.w / 2 + view.tx - pw / 2, y0 = g.h / 2 + view.ty - ph / 2;
-  const hits = items.filter(it => it.page === curPage && (isT || it.uid === user.uid) && !gone.has(it.id) && hitItem(it, x, y, x0, y0, pw, ph));
-  hits.forEach(it => {
-    gone.add(it.id);
-    items = items.filter(i => i.id !== it.id);
-    roomsCol().doc(roomId).collection('strokes').doc(it.id).delete().catch(() => { gone.delete(it.id); });
-  });
-  draw();
-}
+  const rect = canvas.getBoundingClientRect();
+  const x0 = rect.left;
+  const y0 = rect.top;
+  const pw = rect.width;
+  const ph = rect.height;
+  const radius = 20;
 
-/* ================= TOUCH: draw, type, erase, point, zoom ================= */
-const pts = new Map();
-let drawing = null, panOne = null, pinch = null, hadPinch = false;
-const loc = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  let changed = false;
 
-cv.addEventListener('pointerdown', e => {
-  e.preventDefault(); cv.setPointerCapture(e.pointerId);
-  const p = loc(e); pts.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false });
-  if (pts.size === 2) { drawing = null; panOne = null; eraserPos = null; startPinch(); return; }
-  if (pts.size > 2) return;
-  if (mode === 'pen' && canWrite()) {
-    const q = toPage(p.x, p.y);
-    drawing = { kind: 'pen', page: curPage, color, size: PEN[sizeIdx], pts: [q[0], q[1]] };
-  } else if (mode === 'erase' && canWrite()) {
-    eraseAt(p.x, p.y);
-  } else panOne = { x: p.x, y: p.y };
-});
-cv.addEventListener('pointermove', e => {
-  const o = pts.get(e.pointerId); if (!o) return;
-  const p = loc(e);
-  if (Math.hypot(p.x - o.sx, p.y - o.sy) > 8) o.moved = true;
-  o.x = p.x; o.y = p.y;
-  if (pts.size === 2 && pinch) { doPinch(); return; }
-  if (drawing) { const q = toPage(p.x, p.y); drawing.pts.push(q[0], q[1]); draw(); return; }
-  if (mode === 'erase' && pts.size === 1 && canWrite()) { eraseAt(p.x, p.y); return; }
-  if (panOne && pts.size === 1 && view.s > 1.01) {
-    view.tx += p.x - panOne.x; view.ty += p.y - panOne.y; panOne = { x: p.x, y: p.y };
-    clampView(); draw(); viewDirty = true; pushView(false);
-  }
-});
-function pointerEnd(e) {
-  const o = pts.get(e.pointerId); pts.delete(e.pointerId);
-  if (pts.size < 2) pinch = null;
-  if (drawing && pts.size === 0) commitStroke();
-  else if (o && !o.moved && pts.size === 0 && !hadPinch && mode === 'text' && canWrite()) {
-    const q = toPage(o.sx, o.sy); startText(clamp(q[0], 0, 0.97), clamp(q[1], 0, 0.97));
-  }
-  if (pts.size === 0) {
-    if (eraserPos) { eraserPos = null; draw(); }
-    if (viewDirty) { viewDirty = false; pushView(true); }
-    hadPinch = false; panOne = null;
-  }
-}
-cv.addEventListener('pointerup', pointerEnd);
-cv.addEventListener('pointercancel', pointerEnd);
+  items = items.map(it => {
+    if (
+      it.page !== page ||
+      (!isT && it.uid !== user.uid)
+    ) {
+      return it;
+    }
 
-function startPinch() {
-  const [a, b] = [...pts.values()];
-  hadPinch = true;
-  pinch = { d0: Math.max(10, dist(a, b)), s0: view.s, p0: toPage((a.x + b.x) / 2, (a.y + b.y) / 2) };
-}
-function doPinch() {
-  const [a, b] = [...pts.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, g = geom();
-  const s = clamp(pinch.s0 * dist(a, b) / pinch.d0, 1, MAX_ZOOM);
-  view.s = s;
-  view.tx = mx - g.w / 2 - (pinch.p0[0] - 0.5) * g.pw * s;
-  view.ty = my - g.h / 2 - (pinch.p0[1] - 0.5) * g.ph * s;
-  clampView(); draw(); viewDirty = true; pushView(false);
-}
+    if (it.type === 'stroke') {
+      const oldPaths = it.paths || (it.pts ? [it.pts] : []);
 
-async function commitStroke() {
-  const d = drawing; drawing = null; draw();
-  if (!d || !roomId) return;
-  await roomsCol().doc(roomId).collection('strokes').add({
-    kind: 'pen', page: d.page, color: d.color, size: d.size, pts: d.pts.map(v => +v.toFixed(4)), uid: user.uid, t: Date.now()
-  }).catch(e => toast('Could not save: ' + (e.code || e.message)));
-}
+      const newPaths = eraseStrokePaths(
+        it, x, y, x0, y0, pw, ph, radius
+      );
 
-/* ---- typing on the board with the keyboard ---- */
-const kb = $('kb');
-function startText(x, y) {
-  finishText();
-  editing = { id: newId(), kind: 'text', page: curPage, color, size: TXT[sizeIdx], x, y, text: '', uid: user.uid, created: false, t: Date.now() };
-  kb.value = ''; kb.focus({ preventScroll: true }); updateTools(); draw();
-}
-kb.addEventListener('input', () => {
-  if (!editing) return;
-  editing.text = kb.value; draw();
-  clearTimeout(textTimer); textTimer = setTimeout(syncText, 350);
-});
-async function syncText() {
-  const e = editing; if (!e || !roomId) return;
-  const ref = roomsCol().doc(roomId).collection('strokes').doc(e.id);
-  try {
-    if (!e.text.trim()) { if (e.created) { await ref.delete(); e.created = false; } return; }
-    await ref.set({ kind: 'text', page: e.page, color: e.color, size: e.size, x: +e.x.toFixed(4), y: +e.y.toFixed(4), text: e.text, uid: user.uid, t: e.t });
-    e.created = true;
-  } catch (err) { toast('Could not save text: ' + (err.code || err.message)); }
-}
-async function finishText() {
-  clearTimeout(textTimer);
-  if (editing) await syncText();
-  editing = null; kb.value = ''; updateTools(); draw();
-}
-$('doneTxt').onclick = async () => { await finishText(); kb.blur(); };
-
-/* ---- pointer pad: moves the red dot like a mouse ---- */
-const pad = $('pad'); let padLast = null, lastDc = 0, lastFs = 0;
-pad.addEventListener('pointerdown', e => { e.preventDefault(); pad.setPointerCapture(e.pointerId); padLast = { x: e.clientX, y: e.clientY }; ptr.on = true; ptr.t = Date.now(); sendPtr(true); draw(); });
-pad.addEventListener('pointermove', e => {
-  if (!padLast) return;
-  const dx = e.clientX - padLast.x, dy = e.clientY - padLast.y; padLast = { x: e.clientX, y: e.clientY };
-  const g = geom();
-  ptr.x = clamp(ptr.x + dx * 1.6 / (g.pw * view.s), 0, 1); ptr.y = clamp(ptr.y + dy * 1.6 / (g.ph * view.s), 0, 1);
-  ptr.on = true; ptr.t = Date.now(); sendPtr(false); draw();
-});
-const padEnd = () => { padLast = null; ptr.on = false; ptr.t = Date.now(); sendPtr(true); draw(); };
-pad.addEventListener('pointerup', padEnd); pad.addEventListener('pointercancel', padEnd);
-
-function sendPtr(final) {
-  const m = { k: 'ptr', x: +ptr.x.toFixed(4), y: +ptr.y.toFixed(4), on: ptr.on }, now = Date.now();
-  if (dc && dc.readyState === 'open') {
-    if (final || now - lastDc > 30) { dc.send(JSON.stringify(m)); lastDc = now; }
-  } else if (roomId && (final || now - lastFs > 400)) {
-    lastFs = now; roomsCol().doc(roomId).update({ pointer: { x: m.x, y: m.y, on: m.on, t: now } }).catch(() => {});
-  }
-}
-function setRemotePtr(p) { rptr = { x: p.x, y: p.y, on: !!p.on, t: Date.now() }; draw(); }
-
-/* ================= TOOLS UI ================= */
-function buildColors() {
-  const box = $('cols'); box.innerHTML = '';
-  COLORS.forEach(c => {
-    const b = document.createElement('button'); b.className = 'cdot' + (c === color ? ' sel' : '');
-    b.style.background = c === 'ink' ? 'linear-gradient(135deg,#111827 50%,#f8fafc 50%)' : c;
-    b.onclick = () => { color = c; if (editing) { editing.color = c; syncText(); } buildColors(); draw(); };
-    box.appendChild(b);
-  });
-}
-function updateTools() {
-  const w = canWrite();
-  $('mPen').classList.toggle('hide', !w); $('mText').classList.toggle('hide', !w); $('mEra').classList.toggle('hide', !w);
-  $('mPtr').classList.toggle('hide', !isT);
-  $('cols').classList.toggle('hide', !w); $('szBtn').classList.toggle('hide', !w); $('undo').classList.toggle('hide', !w);
-  $('zoomReset').classList.toggle('hide', !isT);
-  $('mPen').classList.toggle('on', mode === 'pen'); $('mText').classList.toggle('on', mode === 'text');
-  $('mEra').classList.toggle('on', mode === 'erase'); $('mPtr').classList.toggle('on', mode === 'pointer');
-  $('doneTxt').classList.toggle('hide', !(mode === 'text' && w));
-  $('szBtn').textContent = 'Size ' + SZN[sizeIdx];
-  $('pager').classList.toggle('hide', !isT);
-  $('pg').textContent = (curPage + 1) + ' / ' + (room.pages || 1);
-}
-function setMode(m) {
-  if (m === 'pointer' && !isT) return;
-  if ((m === 'pen' || m === 'text' || m === 'erase') && !canWrite()) return;
-  if (mode === 'text' && m !== 'text') finishText();
-  mode = m; eraserPos = null;
-  if (m === 'text') kb.focus({ preventScroll: true }); else kb.blur();
-  updateTools(); setTimeout(relayout, 90); draw();
-}
-$('mPen').onclick = () => setMode('pen');
-$('mText').onclick = () => setMode('text');
-$('mEra').onclick = () => setMode('erase');
-$('mPtr').onclick = () => setMode('pointer');
-$('szBtn').onclick = () => { sizeIdx = (sizeIdx + 1) % 3; if (editing) { editing.size = TXT[sizeIdx]; syncText(); } updateTools(); draw(); };
-$('undo').onclick = async () => {
-  if (editing) { editing.text = ''; kb.value = ''; await finishText(); return; }
-  const mine = items.filter(i => i.uid === user.uid && i.page === curPage).pop();
-  if (mine) { gone.add(mine.id); items = items.filter(i => i.id !== mine.id); draw(); roomsCol().doc(roomId).collection('strokes').doc(mine.id).delete().catch(() => { gone.delete(mine.id); }); }
-};
-$('prev').onclick = () => goPage(curPage - 1);
-$('next').onclick = () => goPage(curPage + 1);
-function goPage(p) {
-  if (p < 0 || !isT) return;
-  const max = room.pages || 1;
-  finishText();
-  if (p >= max) { if (room.mode === 'pdf') return; roomsCol().doc(roomId).update({ page: p, pages: p + 1, ...resetViewDoc() }); }
-  else roomsCol().doc(roomId).update({ page: p, ...resetViewDoc() });
-  curPage = p; view = { s: 1, tx: 0, ty: 0 }; updateTools(); loadBg(); draw();
-}
-
-/* ================= MENU / TEACHER CONTROLS ================= */
-function openMenu() { $('drawer').classList.remove('hide'); renderDrawer(); renderDrawerStudents(); if (isT) loadClasses(); }
-function closeMenu() { $('drawer').classList.add('hide'); }
-$('menuBtn').onclick = openMenu; $('dClose').onclick = closeMenu;
-function renderDrawer() {
-  $('dTitle').textContent = isT ? (room.name || 'Menu') : 'Menu';
-  $('dTeacher').classList.toggle('hide', !isT);
-  $('dCall').textContent = isT ? 'Call ' + (room.name || 'student') : 'Call teacher';
-  $('dCall').classList.toggle('hide', !!pc);
-  $('menuBtn').textContent = isT ? 'Students' : 'Menu';
-}
-$('dCall').onclick = () => {
-  closeMenu();
-  if (isT) { if (room.dm) startCall(room.dm, roomId, room.name || 'student'); else toast('Open a student room first.'); }
-  else startCall('teacher', roomId, 'your teacher');
-};
-const jitsiUrl = rid => 'https://' + JITSI_DOMAIN + '/' + JITSI_PREFIX + rid + '#config.prejoinPageEnabled=false&config.startWithVideoMuted=true&userInfo.displayName=' + encodeURIComponent('"' + nameOf() + '"');
-function openBackup() {
-  if (!roomId) return;
-  window.open(jitsiUrl(roomId), '_blank');
-  if (callRef) callRef.update({ fallback: true }).catch(() => {});
-  $('fbBtn').classList.add('hide');
-}
-$('dBackup').onclick = openBackup;
-$('fbBtn').onclick = openBackup;
-
-$('thWhite').onclick = () => roomsCol().doc(roomId).update({ theme: 'white' });
-$('thBlack').onclick = () => roomsCol().doc(roomId).update({ theme: 'black' });
-$('allowD').onchange = e => roomsCol().doc(roomId).update({ studentsCanDraw: e.target.checked });
-$('fit').onclick = () => {
-  if (room.mode === 'pdf') { toast('A PDF keeps its own shape.'); return; }
-  roomsCol().doc(roomId).update({ ratio: screenRatio(), ...resetViewDoc() }); view = { s: 1, tx: 0, ty: 0 };
-};
-$('clr').onclick = async () => { if (confirm('Clear this page?')) await wipe(roomId, 'strokes', curPage); };
-$('blank').onclick = async () => {
-  if (!confirm('Start a new blank board? This clears everything written.')) return;
-  await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {}; curPage = 0; view = { s: 1, tx: 0, ty: 0 };
-  await roomsCol().doc(roomId).update({ mode: 'blank', page: 0, pages: 1, ratio: screenRatio(), topic: '', ...resetViewDoc() });
-  closeMenu();
-};
-async function wipe(id, sub, onlyPage) {
-  const s = await roomsCol().doc(id).collection(sub).get();
-  let batch = db.batch(), n = 0;
-  for (const d of s.docs) {
-    if (onlyPage !== undefined && d.data().page !== onlyPage) continue;
-    batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
-  }
-  await batch.commit();
-}
-
-/* ---- lesson topic ---- */
-$('topicSet').onclick = async () => {
-  if (!roomId) return;
-  await roomsCol().doc(roomId).update({ topic: $('topicIn').value.trim() });
-  toast('Topic set.');
-};
-
-/* ---- save a class (topic + optional document) ---- */
-const jpegFit = c => {
-  let cc = c;
-  for (let k = 0; k < 4; k++) {
-    for (const q of [0.88, 0.8, 0.7, 0.6]) { const url = cc.toDataURL('image/jpeg', q); if (url.length < 930000) return url; }
-    const n = document.createElement('canvas'); n.width = Math.round(cc.width * 0.8); n.height = Math.round(cc.height * 0.8);
-    n.getContext('2d').drawImage(cc, 0, 0, n.width, n.height); cc = n;
-  }
-  throw new Error('A page is too heavy');
-};
-async function renderPageImage(i, ink) {
-  let W2, H2, bgIm = null;
-  if (room.mode === 'pdf') {
-    bgIm = await getPageImg(i);
-    if (!bgIm) throw new Error('Page ' + (i + 1) + ' is missing');
-    W2 = bgIm.naturalWidth; H2 = bgIm.naturalHeight;
-  } else { W2 = 1800; H2 = Math.round(1800 / (room.ratio || 1.4)); }
-  const c = document.createElement('canvas'); c.width = W2; c.height = H2;
-  const x = c.getContext('2d');
-  x.fillStyle = bgIm ? '#fff' : (isDarkBg() ? '#10141b' : '#fff'); x.fillRect(0, 0, W2, H2);
-  if (bgIm) x.drawImage(bgIm, 0, 0, W2, H2);
-  if (ink) items.filter(it => it.page === i).forEach(it => drawItem(it, 0, 0, W2, H2, false, x));
-  return { url: jpegFit(c), ratio: W2 / H2 };
-}
-$('saveClass').onclick = async () => {
-  const title = ($('topicIn').value || room.topic || '').trim();
-  if (!title) { toast('Write the lesson topic first.'); return; }
-  const to = $('visSel').value === 'all' ? 'all' : room.dm;
-  if (!to) { toast('Open a student room first.'); return; }
-  const attach = $('incDoc').checked, ink = $('incInk').checked;
-  const st = $('classStat'), btn = $('saveClass'); btn.disabled = true;
-  try {
-    const id = newId(), n = room.pages || 1;
-    let ratio = room.ratio || 1.4;
-    if (attach) {
-      for (let i = 0; i < n; i++) {
-        st.textContent = 'Preparing page ' + (i + 1) + ' of ' + n + '…';
-        const r = await renderPageImage(i, ink);
-        if (i === 0) ratio = r.ratio;
-        await db.collection('aulas').doc(id).collection('pages').doc(String(i)).set({ img: r.url });
+      if (JSON.stringify(oldPaths) === JSON.stringify(newPaths)) {
+        return it;
       }
-    }
-    await db.collection('aulas').doc(id).set({
-      title, uid: to, roomId, studentName: room.name || '', hasDoc: attach, pages: attach ? n : 0, ratio, createdAt: Date.now()
-    });
-    if (title !== room.topic) await roomsCol().doc(roomId).update({ topic: title });
-    st.textContent = 'Class saved.'; toast('Class saved.');
-    loadClasses();
-  } catch (e) { st.textContent = 'Could not save the class: ' + (e.code || e.message); }
-  btn.disabled = false;
-};
-async function loadClasses() {
-  if (!roomId || !isT) return;
-  const box = $('classList');
-  try {
-    const s = await db.collection('aulas').where('roomId', '==', roomId).get();
-    const list = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt);
-    box.innerHTML = list.length ? '<p class="note">Saved classes (this room)</p>' : '';
-    list.forEach(c => {
-      const row = document.createElement('div'); row.className = 'item';
-      row.innerHTML = '<span><b>' + esc(c.title) + '</b><br><span class="note">' + new Date(c.createdAt).toLocaleDateString('en-GB') +
-        (c.uid === 'all' ? ' · all students' : '') + (c.hasDoc ? ' · document' : '') + '</span></span><span></span>';
-      const sp = row.lastChild;
-      if (c.hasDoc) {
-        const a = document.createElement('a'); a.href = 'aula.html?id=' + encodeURIComponent(c.id); a.target = '_blank'; a.textContent = 'Open';
-        a.style.cssText = 'display:inline-block;padding:8px 12px;border-radius:10px;background:#143d78;color:#fff;text-decoration:none;font-size:14px;margin-right:6px';
-        sp.appendChild(a);
+
+      changed = true;
+
+      if (newPaths.length === 0) {
+        gone.add(it.id);
+        queueEraseSave(it.id, null);
+        return null;
       }
-      const x = document.createElement('button'); x.className = 'd'; x.textContent = 'Delete';
-      x.onclick = async () => {
-        if (!confirm('Delete this class?')) return;
-        const ps = await db.collection('aulas').doc(c.id).collection('pages').get();
-        const b = db.batch(); ps.docs.forEach(d => b.delete(d.ref)); await b.commit();
-        await db.collection('aulas').doc(c.id).delete(); loadClasses();
-      };
-      sp.appendChild(x); box.appendChild(row);
-    });
-  } catch (e) { box.textContent = ''; }
-}
 
-/* ---- PDF upload: high resolution pages ---- */
-$('upPdf').onclick = () => $('pdfIn').click();
-async function pageToJpeg(pg, targetW) {
-  const vp0 = pg.getViewport({ scale: 1 });
-  let w = targetW;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const vp = pg.getViewport({ scale: w / vp0.width });
-    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-    await pg.render({ canvasContext: x, viewport: vp }).promise;
-    for (const q of [0.9, 0.82, 0.72, 0.62]) {
-      const url = c.toDataURL('image/jpeg', q);
-      if (url.length < 930000) return { url, ratio: vp.width / vp.height };
+      queueEraseSave(it.id, newPaths);
+
+      const updated = { ...it, paths: newPaths };
+      delete updated.pts;
+
+      return updated;
     }
-    w = Math.round(w * 0.82);
-  }
-  throw new Error('A page is too heavy');
-}
-$('pdfIn').onchange = async e => {
-  const file = e.target.files[0]; if (!file) return;
-  const st = $('pdfStat'); st.textContent = 'Reading PDF…';
-  try {
-    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-    const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
-    await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {};
-    let ratio = 0.75;
-    for (let i = 1; i <= n; i++) {
-      st.textContent = 'Preparing page ' + i + ' of ' + n + '…';
-      const pg = await pdf.getPage(i);
-      const r = await pageToJpeg(pg, 2000);
-      if (i === 1) ratio = r.ratio;
-      await roomsCol().doc(roomId).collection('pages').doc(String(i - 1)).set({ img: r.url });
+
+    // Textos e outros elementos continuam a ser apagados por inteiro.
+    if (hitItem(it, x, y, x0, y0, pw, ph)) {
+      changed = true;
+      gone.add(it.id);
+      queueEraseSave(it.id, null);
+      return null;
     }
-    curPage = 0; view = { s: 1, tx: 0, ty: 0 };
-    await roomsCol().doc(roomId).update({ mode: 'pdf', page: 0, pages: n, ratio, ...resetViewDoc() });
-    st.textContent = 'PDF ready (' + n + ' pages)' + (pdf.numPages > n ? ' – first ' + n + ' only' : '');
-    closeMenu();
-  } catch (err) { st.textContent = 'Could not load this PDF: ' + (err.message || err); }
-  e.target.value = '';
-};
 
-/* ================= VOICE CALL (WebRTC, signalled through Firestore) ================= */
-let pc = null, dc = null, localStream = null, callRef = null, callRole = '', callUn = null, callTimer = 0, durTimer = 0, fbTimer = 0;
-let connected = false, incoming = null, fbShown = false, armed = false;
-let actx = null, ringTimer = null;
-document.addEventListener('pointerdown', () => {
-  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-  if (actx && actx.state === 'suspended') actx.resume();
-});
-function beep() {
-  if (actx) [0, 0.28].forEach((d, i) => {
-    const o = actx.createOscillator(), g = actx.createGain();
-    o.frequency.value = i ? 520 : 440; g.gain.value = 0.15; o.connect(g); g.connect(actx.destination);
-    o.start(actx.currentTime + d); o.stop(actx.currentTime + d + 0.2);
-  });
-  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
-}
-const ringOn = () => { ringOff(); beep(); ringTimer = setInterval(beep, 1600); };
-const ringOff = () => { clearInterval(ringTimer); ringTimer = null; };
+    return it;
+  }).filter(Boolean);
 
-async function iceServers() {
-  const base = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-  const pub = [
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ];
-  let own = [];
-  if (METERED_APP && METERED_KEY) {
-    try {
-      const r = await fetch('https://' + METERED_APP + '.metered.live/api/v1/turn/credentials?apiKey=' + METERED_KEY);
-      if (r.ok) own = await r.json();
-    } catch (e) { /* ignore */ }
-  }
-  return [...base, ...(own.length ? own : pub)];
+  if (changed) redraw();
 }
 
-function listenCalls() {
-  const to = isT ? 'teacher' : user.uid;
-  db.collection('chamadas').where('toUid', '==', to).where('status', '==', 'ringing').onSnapshot(s => {
-    const c = s.docs.map(x => ({ id: x.id, ...x.data() })).filter(x => Date.now() - x.t < 60000).sort((a, b) => b.t - a.t)[0];
-    if (!c || pc) { $('ring').classList.add('hide'); ringOff(); incoming = null; return; }
-    incoming = c; $('ringName').textContent = c.fromName; $('ring').classList.remove('hide'); ringOn();
-    if (autoAnswer) { autoAnswer = false; setTimeout(() => $('acc').click(), 400); }
-  });
-}
-async function getMic() {
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    return true;
-  } catch (e) { toast('Allow the microphone to make calls.'); return false; }
-}
-const waitIce = () => new Promise(res => {
-  if (pc.iceGatheringState === 'complete') return res();
-  const t = setTimeout(res, 6000);
-  pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
-});
-async function makePc(caller) {
-  callRole = caller ? 'caller' : 'callee'; connected = false; fbShown = false; armed = false;
-  pc = new RTCPeerConnection({ iceServers: await iceServers() });
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.ontrack = e => { $('rau').srcObject = e.streams[0]; $('rau').play().catch(() => {}); };
-  pc.ondatachannel = e => { dc = e.channel; bindDc(dc); };
-  pc.onconnectionstatechange = () => {
-    if (!pc) return;
-    if (pc.connectionState === 'connected') callConnected();
-    if (pc.connectionState === 'failed') showFallback('The call could not connect. Use the backup call.');
-  };
-}
-function armFallback() {
-  if (armed) return; armed = true;
-  clearTimeout(fbTimer);
-  fbTimer = setTimeout(() => { if (pc && !connected) showFallback('Not connecting. Use the backup call.'); }, 15000);
-}
-function showFallback(msg) {
-  $('callTxt').textContent = msg; $('callbar').classList.remove('hide'); $('fbBtn').classList.remove('hide');
-}
-function bindDc(ch) {
-  ch.onmessage = m => { try { const p = JSON.parse(m.data); if (p.k === 'ptr' && !isT) setRemotePtr(p); } catch (e) {} };
-}
-async function startCall(toUid, rid, label) {
-  if (pc) { toast('You are already in a call.'); return; }
-  if (!(await getMic())) return;
-  const ref = db.collection('chamadas').doc();
-  await makePc(true); callRef = ref;
-  dc = pc.createDataChannel('ptr'); bindDc(dc);
-  try {
-    await pc.setLocalDescription(await pc.createOffer());
-    await waitIce();
-    await ref.set({ fromUid: user.uid, fromName: isT ? 'Your teacher' : nameOf(), toUid, roomId: rid, status: 'ringing', t: Date.now(),
-      offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
-  } catch (e) { toast('Could not start the call.'); cleanupCall(); return; }
-  showCallBar('Calling ' + label + '…'); renderDrawer();
-  watchCall(ref);
-  callTimer = setTimeout(() => { if (!connected && !armed) ref.update({ status: 'missed' }).catch(() => {}); }, 45000);
-}
-$('acc').onclick = async () => {
-  const c = incoming; if (!c) return;
-  ringOff(); $('ring').classList.add('hide'); incoming = null;
-  if (!(await getMic())) { db.collection('chamadas').doc(c.id).update({ status: 'declined' }).catch(() => {}); return; }
-  try {
-    if (isT) await ensureDm(c.fromUid, c.fromName);
-    const ref = db.collection('chamadas').doc(c.id);
-    await makePc(false); callRef = ref;
-    await pc.setRemoteDescription(c.offer);
-    await pc.setLocalDescription(await pc.createAnswer());
-    await waitIce();
-    await ref.update({ answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }, status: 'accepted' });
-    showCallBar('Connecting…'); renderDrawer();
-    watchCall(ref); armFallback();
-    if (roomId !== c.roomId) enterRoom(c.roomId);
-  } catch (e) { toast('Could not answer the call.'); cleanupCall(); }
-};
-$('dec').onclick = () => {
-  const c = incoming; if (!c) return;
-  ringOff(); $('ring').classList.add('hide'); incoming = null;
-  db.collection('chamadas').doc(c.id).update({ status: 'declined' }).catch(() => {});
-};
-function watchCall(ref) {
-  if (callUn) callUn();
-  callUn = ref.onSnapshot(s => {
-    const c = s.data(); if (!c || !pc) return;
-    if (callRole === 'caller' && c.answer && pc.signalingState === 'have-local-offer') pc.setRemoteDescription(c.answer).catch(() => {});
-    if (callRole === 'caller' && c.status === 'accepted') { armFallback(); if (roomId !== c.roomId) enterRoom(c.roomId); }
-    if (c.fallback && !fbShown) { fbShown = true; showFallback('Switched to the backup call. Tap to join.'); }
-    if (['declined', 'missed', 'ended'].includes(c.status)) {
-      if (c.status === 'declined') toast('Call declined.');
-      if (c.status === 'missed') toast('No answer.');
-      cleanupCall();
-    }
-  });
-}
-function callConnected() {
-  if (connected) return; connected = true; clearTimeout(callTimer); clearTimeout(fbTimer);
-  $('fbBtn').classList.add('hide');
-  const t0 = Date.now(); $('muteBtn').classList.remove('hide');
-  clearInterval(durTimer);
-  durTimer = setInterval(() => {
-    const s = Math.floor((Date.now() - t0) / 1000);
-    $('callTxt').textContent = 'On call · ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-  }, 1000);
-  $('callTxt').textContent = 'On call · 00:00';
-}
-function showCallBar(t) { $('callTxt').textContent = t; $('muteBtn').classList.add('hide'); $('fbBtn').classList.add('hide'); $('callbar').classList.remove('hide'); }
-$('muteBtn').onclick = () => {
-  if (!localStream) return;
-  const t = localStream.getAudioTracks()[0]; if (!t) return;
-  t.enabled = !t.enabled; $('muteBtn').textContent = t.enabled ? 'Mute' : 'Unmute';
-};
-function hangup() { if (callRef) callRef.update({ status: 'ended' }).catch(() => {}); cleanupCall(); }
-$('endBtn').onclick = hangup;
-function cleanupCall() {
-  clearTimeout(callTimer); clearTimeout(fbTimer); clearInterval(durTimer);
-  if (callUn) { callUn(); callUn = null; }
-  if (dc) { try { dc.close(); } catch (e) {} dc = null; }
-  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  $('rau').srcObject = null; $('callbar').classList.add('hide'); $('fbBtn').classList.add('hide'); $('muteBtn').textContent = 'Mute';
-  callRef = null; connected = false; fbShown = false; armed = false; renderDrawer();
-}
 
-/* ================= START ================= */
-buildColors(); updateTools(); relayout();
-</script>
-</body>
-</html>
+// NO onSnapshot DAS STROKES, SUBSTITUA A ATRIBUIÇÃO DE items POR:
+items = s.docs
+  .map(d => ({ id: d.id, ...d.data() }))
+  .filter(it => !gone.has(it.id))
+  .map(it => {
+    if (!erasePending.has(it.id)) return it;
+
+    const pendingPaths = erasePending.get(it.id);
+
+    if (pendingPaths === null) return null;
+
+    const updated = { ...it, paths: pendingPaths };
+    delete updated.pts;
+
+    return updated;
+  })
+  .filter(Boolean);
+
+
+// NA FUNÇÃO pointerEnd(), ADICIONE:
+flushEraseSaves();

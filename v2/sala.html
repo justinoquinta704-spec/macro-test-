@@ -95,6 +95,7 @@ label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
     <div id="tools">
       <button id="mPen">Pen</button>
       <button id="mText">Text</button>
+      <button id="mEra">Eraser</button>
       <button id="mPtr" class="hide">Pointer</button>
       <span id="cols" style="display:flex;gap:6px"></span>
       <button id="szBtn">Size M</button>
@@ -179,7 +180,7 @@ const FIREBASE_CONFIG = {
 };
 const TEACHER_EMAIL = 'justinoquinta704@gmail.com';
 const JITSI_DOMAIN = 'meet.jit.si', JITSI_PREFIX = 'SchoolOfCommunicators-';
-/* optional free TURN relay (metered.ca). Makes voice calls work on mobile data. See the instructions. */
+/* optional free TURN relay (metered.ca). Makes voice calls work on mobile data. */
 const METERED_APP = '';
 const METERED_KEY = '';
 const MAX_PDF_PAGES = 40;
@@ -203,6 +204,8 @@ let mode = 'pen', color = 'ink', sizeIdx = 1, editing = null, textTimer = 0;
 let view = { s: 1, tx: 0, ty: 0 }, lastViewT = 0;
 let stageW = 0, stageH = 0, dpr = 1, baseH = innerHeight, kbH = 0;
 let ptr = { x: 0.5, y: 0.5, on: false }, rptr = null;
+let eraserPos = null;
+const gone = new Set();
 let autoAnswer = new URLSearchParams(location.search).get('answer') === '1';
 
 const cv = $('cv'), ctx = cv.getContext('2d');
@@ -277,7 +280,7 @@ $('myRoom').onclick = () => enterRoom('dm_' + user.uid);
 async function enterRoom(id) {
   if (blocked) { toast('Classes are locked until your tuition is paid.'); return; }
   unsubs.forEach(u => u()); unsubs = [];
-  roomId = id; items = []; imgCache = {}; curPage = 0; room = {}; editing = null; lastViewT = 0;
+  roomId = id; items = []; imgCache = {}; curPage = 0; room = {}; editing = null; lastViewT = 0; gone.clear(); eraserPos = null;
   view = { s: 1, tx: 0, ty: 0 };
   $('lobby').classList.add('hide'); $('app').classList.remove('hide');
   mode = 'pen';
@@ -295,11 +298,11 @@ async function enterRoom(id) {
     $('allowD').checked = room.studentsCanDraw === true;
     $('topic').textContent = room.topic || ''; $('topic').classList.toggle('hide', !room.topic);
     if (isT && document.activeElement !== $('topicIn')) $('topicIn').value = room.topic || '';
-    if (!canWrite() && (mode === 'pen' || mode === 'text')) mode = isT ? 'pen' : 'view';
+    if (!canWrite() && (mode === 'pen' || mode === 'text' || mode === 'erase')) mode = isT ? 'pen' : 'view';
     updateTools(); renderDrawer(); loadBg(); draw();
   }, onErr));
   unsubs.push(ref.collection('strokes').orderBy('t').onSnapshot(s => {
-    items = s.docs.map(d => ({ id: d.id, ...d.data() })); draw();
+    items = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => !gone.has(i.id)); draw();
   }, onErr));
 }
 function exitToLobby(silent) {
@@ -389,6 +392,10 @@ function render() {
   if (editing && editing.page === curPage) drawItem(editing, x0, y0, pw, ph, true);
   if (drawing) drawItem(drawing, x0, y0, pw, ph, false);
   drawPointer(isT ? ptr : rptr, x0, y0, pw, ph);
+  if (eraserPos) {
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.fillStyle = 'rgba(239,68,68,.12)';
+    ctx.beginPath(); ctx.arc(eraserPos.x, eraserPos.y, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
 }
 
 function drawItem(it, x0, y0, pw, ph, isEdit, c) {
@@ -442,7 +449,46 @@ async function loadBg() {
   }
 }
 
-/* ================= TOUCH: draw, type, point, zoom ================= */
+/* ================= ERASER: removes strokes and text, never the PDF ================= */
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function hitItem(it, x, y, x0, y0, pw, ph) {
+  if (it.kind === 'text') {
+    const px = Math.max(6, it.size * pw), lh = px * 1.25;
+    ctx.font = '500 ' + px + 'px ' + FONT;
+    const lines = String(it.text || '').split('\n');
+    const w = Math.max(px, ...lines.map(l => ctx.measureText(l).width));
+    const rx = x0 + it.x * pw, ry = y0 + it.y * ph;
+    return x >= rx - 12 && x <= rx + w + 12 && y >= ry - 12 && y <= ry + lines.length * lh + 12;
+  }
+  const p = it.pts; if (!p || p.length < 2) return false;
+  const r = Math.max(18, it.size * pw / 2 + 14);
+  for (let i = 0; i + 1 < p.length; i += 2) {
+    const ax = x0 + p[i] * pw, ay = y0 + p[i + 1] * ph;
+    const hasNext = i + 3 < p.length;
+    const bx = hasNext ? x0 + p[i + 2] * pw : ax, by = hasNext ? y0 + p[i + 3] * ph : ay;
+    if (segDist(x, y, ax, ay, bx, by) <= r) return true;
+  }
+  return false;
+}
+function eraseAt(x, y) {
+  eraserPos = { x, y };
+  const g = geom(), pw = g.pw * view.s, ph = g.ph * view.s;
+  const x0 = g.w / 2 + view.tx - pw / 2, y0 = g.h / 2 + view.ty - ph / 2;
+  const hits = items.filter(it => it.page === curPage && (isT || it.uid === user.uid) && !gone.has(it.id) && hitItem(it, x, y, x0, y0, pw, ph));
+  hits.forEach(it => {
+    gone.add(it.id);
+    items = items.filter(i => i.id !== it.id);
+    roomsCol().doc(roomId).collection('strokes').doc(it.id).delete().catch(() => { gone.delete(it.id); });
+  });
+  draw();
+}
+
+/* ================= TOUCH: draw, type, erase, point, zoom ================= */
 const pts = new Map();
 let drawing = null, panOne = null, pinch = null, hadPinch = false;
 const loc = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -451,11 +497,13 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); cv.setPointerCapture(e.pointerId);
   const p = loc(e); pts.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false });
-  if (pts.size === 2) { drawing = null; panOne = null; startPinch(); return; }
+  if (pts.size === 2) { drawing = null; panOne = null; eraserPos = null; startPinch(); return; }
   if (pts.size > 2) return;
   if (mode === 'pen' && canWrite()) {
     const q = toPage(p.x, p.y);
     drawing = { kind: 'pen', page: curPage, color, size: PEN[sizeIdx], pts: [q[0], q[1]] };
+  } else if (mode === 'erase' && canWrite()) {
+    eraseAt(p.x, p.y);
   } else panOne = { x: p.x, y: p.y };
 });
 cv.addEventListener('pointermove', e => {
@@ -465,6 +513,7 @@ cv.addEventListener('pointermove', e => {
   o.x = p.x; o.y = p.y;
   if (pts.size === 2 && pinch) { doPinch(); return; }
   if (drawing) { const q = toPage(p.x, p.y); drawing.pts.push(q[0], q[1]); draw(); return; }
+  if (mode === 'erase' && pts.size === 1 && canWrite()) { eraseAt(p.x, p.y); return; }
   if (panOne && pts.size === 1 && view.s > 1.01) {
     view.tx += p.x - panOne.x; view.ty += p.y - panOne.y; panOne = { x: p.x, y: p.y };
     clampView(); draw(); viewDirty = true; pushView(false);
@@ -478,6 +527,7 @@ function pointerEnd(e) {
     const q = toPage(o.sx, o.sy); startText(clamp(q[0], 0, 0.97), clamp(q[1], 0, 0.97));
   }
   if (pts.size === 0) {
+    if (eraserPos) { eraserPos = null; draw(); }
     if (viewDirty) { viewDirty = false; pushView(true); }
     hadPinch = false; panOne = null;
   }
@@ -570,11 +620,12 @@ function buildColors() {
 }
 function updateTools() {
   const w = canWrite();
-  $('mPen').classList.toggle('hide', !w); $('mText').classList.toggle('hide', !w);
+  $('mPen').classList.toggle('hide', !w); $('mText').classList.toggle('hide', !w); $('mEra').classList.toggle('hide', !w);
   $('mPtr').classList.toggle('hide', !isT);
   $('cols').classList.toggle('hide', !w); $('szBtn').classList.toggle('hide', !w); $('undo').classList.toggle('hide', !w);
   $('zoomReset').classList.toggle('hide', !isT);
-  $('mPen').classList.toggle('on', mode === 'pen'); $('mText').classList.toggle('on', mode === 'text'); $('mPtr').classList.toggle('on', mode === 'pointer');
+  $('mPen').classList.toggle('on', mode === 'pen'); $('mText').classList.toggle('on', mode === 'text');
+  $('mEra').classList.toggle('on', mode === 'erase'); $('mPtr').classList.toggle('on', mode === 'pointer');
   $('doneTxt').classList.toggle('hide', !(mode === 'text' && w));
   $('szBtn').textContent = 'Size ' + SZN[sizeIdx];
   $('pager').classList.toggle('hide', !isT);
@@ -582,20 +633,21 @@ function updateTools() {
 }
 function setMode(m) {
   if (m === 'pointer' && !isT) return;
-  if ((m === 'pen' || m === 'text') && !canWrite()) return;
+  if ((m === 'pen' || m === 'text' || m === 'erase') && !canWrite()) return;
   if (mode === 'text' && m !== 'text') finishText();
-  mode = m;
+  mode = m; eraserPos = null;
   if (m === 'text') kb.focus({ preventScroll: true }); else kb.blur();
-  updateTools(); setTimeout(relayout, 90);
+  updateTools(); setTimeout(relayout, 90); draw();
 }
 $('mPen').onclick = () => setMode('pen');
 $('mText').onclick = () => setMode('text');
+$('mEra').onclick = () => setMode('erase');
 $('mPtr').onclick = () => setMode('pointer');
 $('szBtn').onclick = () => { sizeIdx = (sizeIdx + 1) % 3; if (editing) { editing.size = TXT[sizeIdx]; syncText(); } updateTools(); draw(); };
 $('undo').onclick = async () => {
   if (editing) { editing.text = ''; kb.value = ''; await finishText(); return; }
   const mine = items.filter(i => i.uid === user.uid && i.page === curPage).pop();
-  if (mine) roomsCol().doc(roomId).collection('strokes').doc(mine.id).delete().catch(() => {});
+  if (mine) { gone.add(mine.id); items = items.filter(i => i.id !== mine.id); draw(); roomsCol().doc(roomId).collection('strokes').doc(mine.id).delete().catch(() => { gone.delete(mine.id); }); }
 };
 $('prev').onclick = () => goPage(curPage - 1);
 $('next').onclick = () => goPage(curPage + 1);

@@ -28,6 +28,7 @@ h2{font-size:18px;color:var(--navy);margin:0 0 10px}
 .dot.on{background:#12b76a}
 input[type=text]{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0}
 select{width:100%;padding:10px;border:1px solid #cfd8ea;border-radius:10px;font-size:15px;margin:6px 0;background:#fff}
+.pick label{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:15px;color:var(--ink)}
 
 /* classroom */
 #app{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:#0b1220}
@@ -58,6 +59,18 @@ label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
 </head>
 <body>
 
+<!-- shows any error on the page instead of staying on "Loading…" -->
+<script>
+window.addEventListener('error', function (ev) {
+  var m = document.getElementById('lobbyMsg');
+  if (m) { m.classList.remove('hide'); m.style.color = '#b42318'; m.textContent = 'Error: ' + ev.message + ' (line ' + ev.lineno + ')'; }
+});
+window.addEventListener('unhandledrejection', function (ev) {
+  var m = document.getElementById('lobbyMsg');
+  if (m) { m.classList.remove('hide'); m.style.color = '#b42318'; m.textContent = 'Error: ' + ((ev.reason && ev.reason.message) || ev.reason); }
+});
+</script>
+
 <!-- LOBBY -->
 <div id="lobby">
   <div class="top"><b>Classroom</b><a href="home.html">Back</a></div>
@@ -71,10 +84,21 @@ label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
       <h2>Students</h2>
       <div id="stus" class="note">No student has opened the platform yet.</div>
     </div>
+    <div id="gLobby" class="card hide">
+      <h2>Group classes</h2>
+      <input type="text" id="gName" maxlength="60" placeholder="Group name (e.g. Evening class)" autocomplete="off">
+      <div id="gPick" class="pick note">Choose the students…</div>
+      <div class="row"><button class="p" id="gCreate">Create group</button></div>
+      <div id="gList"></div>
+    </div>
     <div id="sLobby" class="card hide">
       <h2>Your teacher</h2>
       <div class="row"><button class="p" id="callT">Call teacher</button><button class="s" id="myRoom">Open my room</button></div>
       <p class="note">Allow the microphone when asked.</p>
+    </div>
+    <div id="sGroups" class="card hide">
+      <h2>Group classes</h2>
+      <div id="sgList"></div>
     </div>
   </div>
 </div>
@@ -115,17 +139,24 @@ label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
   <h3>Call</h3>
   <div class="row">
     <button class="p" id="dCall">Call</button>
+    <button class="p hide" id="dCallG">Call the group</button>
     <button class="s" id="dBackup">Backup call</button>
   </div>
-  <p class="note">Backup call opens a voice call in a new tab, with no time limit.</p>
+  <p class="note">Backup call opens a voice call in a new tab, with no time limit. In a group, everyone joins the same call.</p>
 
   <div id="dTeacher" class="hide">
+    <div id="dGroup" class="hide">
+      <h3>Group members</h3>
+      <div id="dgPick" class="pick"></div>
+      <div class="row"><button class="s" id="dgSave">Save members</button></div>
+    </div>
+
     <h3>Lesson topic</h3>
     <input type="text" id="topicIn" maxlength="80" placeholder="e.g. Verb to be" autocomplete="off">
     <div class="row"><button class="p" id="topicSet">Set topic</button></div>
 
     <h3>Save this class</h3>
-    <select id="visSel"><option value="one">For this student</option><option value="all">For all students</option></select>
+    <select id="visSel"></select>
     <label class="t"><input type="checkbox" id="incDoc" checked> Attach the board document</label>
     <label class="t"><input type="checkbox" id="incInk" checked> Include what I wrote</label>
     <div class="row"><button class="p" id="saveClass">Save class</button></div>
@@ -137,7 +168,7 @@ label.t{display:flex;align-items:center;gap:8px;font-size:15px;margin:8px 0}
       <button class="s" id="thWhite">White board</button>
       <button class="s" id="thBlack">Black board</button>
     </div>
-    <label class="t"><input type="checkbox" id="allowD"> Student can write</label>
+    <label class="t"><input type="checkbox" id="allowD"> Students can write</label>
     <div class="row">
       <button class="s" id="upPdf">Upload PDF</button>
       <button class="s" id="blank">New blank board</button>
@@ -186,7 +217,7 @@ const METERED_KEY = '';
 const MAX_PDF_PAGES = 40;
 const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 const COLORS = ['ink', '#e11d48', '#16a34a', '#f59e0b', '#0ea5e9'];
-const PEN = [0.003, 0.0055, 0.009], TXT = [0.03, 0.045, 0.07], SZN = ['S', 'M', 'L'];
+const PEN = [0.003, 0.0055, 0.009], TXT = [0.03, 0.045, 0.07], SZN = ['S', 'M', 'L'], ERASE_R = [12, 22, 36];
 const MAX_ZOOM = 12;
 
 firebase.initializeApp(FIREBASE_CONFIG);
@@ -200,14 +231,14 @@ const newId = () => db.collection('x').doc().id;
 const roomsCol = () => db.collection('salas');
 
 let user, isT = false, blocked = false, roomId = null, room = {}, items = [], curPage = 0, imgCache = {}, unsubs = [];
-let mode = 'pen', color = 'ink', sizeIdx = 1, editing = null, textTimer = 0;
+let mode = 'pen', color = 'ink', sizeIdx = 1, editing = null, textTimer = 0, resizing = false, handlePos = null;
 let view = { s: 1, tx: 0, ty: 0 }, lastViewT = 0;
 let stageW = 0, stageH = 0, dpr = 1, baseH = innerHeight, kbH = 0;
 let ptr = { x: 0.5, y: 0.5, on: false }, rptr = null;
 let eraserPos = null;
 const gone = new Set();
-const erasePending = new Map();   /* id -> new paths (or null = delete), waiting to be saved */
-const eraseMem = new Map();       /* id -> { paths, until }: keeps the erased look until the server catches up */
+const erasePending = new Map();   /* id -> change (null = delete, {paths}, or {text}) waiting to be saved */
+const eraseMem = new Map();       /* id -> { change, until }: keeps the erased look until the server catches up */
 let eraseSaveTimer = null;
 let autoAnswer = new URLSearchParams(location.search).get('answer') === '1';
 
@@ -235,21 +266,23 @@ auth.onAuthStateChanged(async u => {
   $('lobbyMsg').classList.add('hide');
   if (!isT) { try { await checkAccess(); } catch (e) { blocked = true; } }
   $('tLobby').classList.toggle('hide', !isT);
+  $('gLobby').classList.toggle('hide', !isT);
   $('sLobby').classList.toggle('hide', isT || blocked);
   $('blocked').classList.toggle('hide', !blocked);
-  if (isT) loadStudents(); else { beat(); setInterval(beat, 30000); }
+  if (isT) { loadStudents(); loadGroups(); } else { beat(); setInterval(beat, 30000); }
   if (blocked) return;
+  if (!isT) loadMyGroups();
   listenCalls();
   const id = new URLSearchParams(location.search).get('sala');
   if (id) enterRoom(id);
 });
 
 const beat = () => db.collection('alunos').doc(user.uid).set({ name: nameOf(), email: user.email || '', seen: Date.now() }, { merge: true }).catch(() => {});
-let students = [];
+let students = [], groups = [];
 function loadStudents() {
   db.collection('alunos').onSnapshot(s => {
     students = s.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    renderStudents(); renderDrawerStudents();
+    renderStudents(); renderDrawerStudents(); renderGroupPick();
   });
   setInterval(() => { renderStudents(); renderDrawerStudents(); }, 20000);
 }
@@ -259,4 +292,1089 @@ function studentRows(el, closeDrawer) {
   el.innerHTML = '';
   [...students].sort((a, b) => isOnline(b) - isOnline(a)).forEach(st => {
     const row = document.createElement('div'); row.className = 'item';
-    row.innerHTML = '<span><span class="dot' + (isOnline(st) ? ' on' : '') + '"></span><b>' + esc(st.name || st.email || '') + '</b></span><span>
+    row.innerHTML = '<span><span class="dot' + (isOnline(st) ? ' on' : '') + '"></span><b>' + esc(st.name || st.email || '') + '</b></span><span></span>';
+    const sp = row.lastChild;
+    const o = document.createElement('button'); o.className = 's'; o.textContent = 'Open';
+    o.onclick = async () => { await ensureDm(st.uid, st.name); if (closeDrawer) closeMenu(); enterRoom('dm_' + st.uid); };
+    const c = document.createElement('button'); c.className = 'p'; c.style.marginLeft = '6px'; c.textContent = 'Call';
+    c.onclick = async () => { await ensureDm(st.uid, st.name); if (closeDrawer) closeMenu(); await enterRoom('dm_' + st.uid); startCall(st.uid, 'dm_' + st.uid, st.name); };
+    sp.appendChild(o); sp.appendChild(c);
+    el.appendChild(row);
+  });
+}
+const renderStudents = () => studentRows($('stus'), false);
+const renderDrawerStudents = () => { if (!$('drawer').classList.contains('hide')) studentRows($('dStus'), true); };
+
+async function ensureDm(uid, name) {
+  const ref = roomsCol().doc('dm_' + uid), d = await ref.get();
+  if (!d.exists) await ref.set({ name: name || 'Student', open: false, dm: uid, theme: 'white', studentsCanDraw: false, mode: 'blank', page: 0, pages: 1, ratio: screenRatio(), topic: '', createdBy: user.uid, t: Date.now() });
+}
+$('callT').onclick = () => startCall('teacher', 'dm_' + user.uid, 'your teacher');
+$('myRoom').onclick = () => enterRoom('dm_' + user.uid);
+
+/* ================= GROUP CLASSES ================= */
+function pickHtml(selected) {
+  if (!students.length) return '<span class="note">No students yet.</span>';
+  return students.map(st => '<label><input type="checkbox" value="' + esc(st.uid) + '"' + (selected && selected.has(st.uid) ? ' checked' : '') + '> ' + esc(st.name || st.email || '') + '</label>').join('');
+}
+function renderGroupPick() {
+  const keep = new Set([...document.querySelectorAll('#gPick input:checked')].map(i => i.value));
+  $('gPick').innerHTML = pickHtml(keep);
+}
+$('gCreate').onclick = async () => {
+  const name = $('gName').value.trim();
+  const sel = [...document.querySelectorAll('#gPick input:checked')].map(i => i.value);
+  if (!name) { toast('Give the group a name.'); return; }
+  if (sel.length < 2) { toast('Choose at least 2 students.'); return; }
+  try {
+    await roomsCol().doc('grp_' + newId()).set({
+      name, group: true, members: sel, open: false, theme: 'white', studentsCanDraw: false, mode: 'blank',
+      page: 0, pages: 1, ratio: screenRatio(), topic: '', createdBy: user.uid, t: Date.now()
+    });
+    $('gName').value = ''; renderGroupPick(); toast('Group created.');
+  } catch (e) { toast('Could not create the group: ' + (e.code || e.message)); }
+};
+function loadGroups() {
+  roomsCol().where('group', '==', true).onSnapshot(s => {
+    groups = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.t || 0) - (a.t || 0));
+    const box = $('gList'); box.innerHTML = groups.length ? '<p class="note">Your groups</p>' : '';
+    groups.forEach(g => {
+      const row = document.createElement('div'); row.className = 'item';
+      row.innerHTML = '<span><b>' + esc(g.name) + '</b><br><span class="note">' + (g.members || []).length + ' students</span></span><span></span>';
+      const sp = row.lastChild;
+      const o = document.createElement('button'); o.className = 'p'; o.textContent = 'Open'; o.onclick = () => enterRoom(g.id);
+      const x = document.createElement('button'); x.className = 'd'; x.style.marginLeft = '6px'; x.textContent = 'Delete';
+      x.onclick = async () => {
+        if (!confirm('Delete the group "' + g.name + '"?')) return;
+        try { await wipe(g.id, 'strokes'); await wipe(g.id, 'pages'); await roomsCol().doc(g.id).delete(); }
+        catch (e) { toast('Could not delete: ' + (e.code || e.message)); }
+      };
+      sp.appendChild(o); sp.appendChild(x); box.appendChild(row);
+    });
+  });
+}
+function loadMyGroups() {
+  roomsCol().where('members', 'array-contains', user.uid).onSnapshot(s => {
+    const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    $('sGroups').classList.toggle('hide', !list.length);
+    const box = $('sgList'); box.innerHTML = '';
+    list.forEach(g => {
+      const row = document.createElement('div'); row.className = 'item';
+      row.innerHTML = '<span><b>' + esc(g.name) + '</b></span><span></span>';
+      const b = document.createElement('button'); b.className = 'p'; b.textContent = 'Enter'; b.onclick = () => enterRoom(g.id);
+      row.lastChild.appendChild(b); box.appendChild(row);
+    });
+  }, () => {});
+}
+function fillGroupEditor() {
+  if (!(isT && room.group)) return;
+  $('dgPick').innerHTML = pickHtml(new Set(room.members || []));
+}
+$('dgSave').onclick = async () => {
+  const sel = [...document.querySelectorAll('#dgPick input:checked')].map(i => i.value);
+  if (sel.length < 1) { toast('Choose at least 1 student.'); return; }
+  await roomsCol().doc(roomId).update({ members: sel }); toast('Members saved.');
+};
+
+/* ================= ROOM ================= */
+/* strokes are stored with "pts" (one line) or "paths" (a line cut into pieces by the eraser).
+   Firestore does not allow lists inside lists, so each piece is saved as { p: [...] }. */
+const fromDoc = d => {
+  const o = { id: d.id, ...d.data() };
+  if (Array.isArray(o.paths)) o.paths = o.paths.map(x => (x && x.p) || []);
+  return o;
+};
+
+async function enterRoom(id) {
+  if (blocked) { toast('Classes are locked until your tuition is paid.'); return; }
+  unsubs.forEach(u => u()); unsubs = [];
+  roomId = id; items = []; imgCache = {}; curPage = 0; room = {}; editing = null; lastViewT = 0;
+  gone.clear(); erasePending.clear(); eraseMem.clear(); eraserPos = null;
+  view = { s: 1, tx: 0, ty: 0 };
+  $('lobby').classList.add('hide'); $('app').classList.remove('hide');
+  mode = 'pen';
+  relayout(); updateTools(); renderDrawer();
+  const ref = roomsCol().doc(id);
+  const onErr = err => {
+    if (err && err.code === 'permission-denied') { blocked = !isT; toast('Access to this room is locked.'); exitToLobby(true); }
+  };
+  unsubs.push(ref.onSnapshot(s => {
+    if (!s.exists) { toast('This room is not open yet. Ask your teacher.'); exitToLobby(true); return; }
+    room = s.data();
+    if (!isT) curPage = room.page || 0;
+    if (!isT && room.pointer && Date.now() - room.pointer.t < 2500 && !(dc && dc.readyState === 'open')) setRemotePtr(room.pointer);
+    if (!isT && room.view && room.view.t !== lastViewT && pts.size === 0) { lastViewT = room.view.t; applyView(room.view); }
+    $('allowD').checked = room.studentsCanDraw === true;
+    $('topic').textContent = room.topic || ''; $('topic').classList.toggle('hide', !room.topic);
+    if (isT && document.activeElement !== $('topicIn')) $('topicIn').value = room.topic || '';
+    if (!canWrite() && (mode === 'pen' || mode === 'text' || mode === 'erase')) mode = isT ? 'pen' : 'view';
+    updateTools(); renderDrawer(); loadBg(); draw();
+  }, onErr));
+  unsubs.push(ref.collection('strokes').orderBy('t').onSnapshot(s => {
+    const now = Date.now();
+    items = s.docs.map(fromDoc).filter(it => !gone.has(it.id)).map(it => {
+      const m = eraseMem.get(it.id);
+      if (!m) return it;
+      if (m.until < now) { eraseMem.delete(it.id); return it; }
+      if (m.change === null) return null;
+      const u = { ...it };
+      if (m.change.paths) { u.paths = m.change.paths; delete u.pts; }
+      if (m.change.text !== undefined) u.text = m.change.text;
+      return u;
+    }).filter(Boolean);
+    draw();
+  }, onErr));
+}
+function exitToLobby(silent) {
+  if (!silent && (pc || gcall) && !confirm('Leave the room and end the call?')) return;
+  flushEraseSaves();
+  if (gcall) endGroup();
+  if (pc) hangup();
+  unsubs.forEach(u => u()); unsubs = []; roomId = null; editing = null;
+  closeMenu(); $('app').classList.add('hide'); $('lobby').classList.remove('hide');
+  $('sLobby').classList.toggle('hide', isT || blocked); $('blocked').classList.toggle('hide', !blocked);
+  history.replaceState(null, '', location.pathname);
+}
+$('exitBtn').onclick = () => exitToLobby(false);
+
+/* ================= VIEWPORT: the board fills what the keyboard leaves ================= */
+function relayout() {
+  const vv = window.visualViewport;
+  const h = vv ? vv.height : innerHeight;
+  baseH = Math.max(baseH, h, innerHeight);
+  const app = $('app');
+  app.style.height = h + 'px'; app.style.top = (vv ? vv.offsetTop : 0) + 'px';
+  if (baseH - h > 120) kbH = baseH - h;
+  const showPad = mode === 'pointer' && isT;
+  const padH = showPad ? clamp(kbH || Math.round(baseH * 0.38), 200, Math.round(baseH * 0.5)) : 0;
+  $('pad').style.height = padH + 'px'; $('pad').classList.toggle('hide', !showPad);
+  requestAnimationFrame(resizeCanvas);
+}
+function resizeCanvas() {
+  const r = $('stage').getBoundingClientRect();
+  stageW = r.width; stageH = r.height; dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(stageW * dpr); cv.height = Math.round(stageH * dpr);
+  if (!isT && room.view) applyView(room.view);
+  clampView(); draw();
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', relayout); visualViewport.addEventListener('scroll', relayout); }
+addEventListener('resize', relayout);
+
+/* ================= GEOMETRY + SHARED ZOOM ================= */
+function geom() {
+  const r = room.ratio || (stageW / Math.max(1, stageH));
+  const pw = Math.min(stageW, stageH * r);
+  return { w: stageW, h: stageH, pw, ph: pw / r };
+}
+function toPage(x, y) { const g = geom(); return [(x - g.w / 2 - view.tx) / (g.pw * view.s) + 0.5, (y - g.h / 2 - view.ty) / (g.ph * view.s) + 0.5]; }
+function pageRect() {
+  const g = geom(), pw = g.pw * view.s, ph = g.ph * view.s;
+  return { x0: g.w / 2 + view.tx - pw / 2, y0: g.h / 2 + view.ty - ph / 2, pw, ph };
+}
+function clampView() {
+  const g = geom(), mx = Math.max(0, (g.pw * view.s - g.w) / 2) + g.w * 0.3, my = Math.max(0, (g.ph * view.s - g.h) / 2) + g.h * 0.3;
+  view.tx = clamp(view.tx, -mx, mx); view.ty = clamp(view.ty, -my, my);
+}
+function applyView(v) {
+  if (!v || !stageW) return;
+  const g = geom(), s = clamp(v.s || 1, 1, MAX_ZOOM);
+  view.s = s;
+  view.tx = -((v.x == null ? 0.5 : v.x) - 0.5) * g.pw * s;
+  view.ty = -((v.y == null ? 0.5 : v.y) - 0.5) * g.ph * s;
+  clampView(); draw();
+}
+let pushTimer = 0, viewDirty = false;
+function pushView(now) {
+  if (!isT || !roomId) return;
+  const run = () => {
+    pushTimer = 0;
+    const c = toPage(stageW / 2, stageH / 2);
+    roomsCol().doc(roomId).update({ view: { s: +view.s.toFixed(3), x: +c[0].toFixed(4), y: +c[1].toFixed(4), t: Date.now() } }).catch(() => {});
+  };
+  if (now) { clearTimeout(pushTimer); run(); } else if (!pushTimer) pushTimer = setTimeout(run, 250);
+}
+const resetViewDoc = () => ({ view: { s: 1, x: 0.5, y: 0.5, t: Date.now() } });
+$('zoomReset').onclick = () => { view = { s: 1, tx: 0, ty: 0 }; draw(); pushView(true); };
+
+/* ================= TEXT LAYOUT (paragraph with a width, wraps by words) ================= */
+function layoutText(it, pw, c) {
+  const g = c || ctx;
+  const px = Math.max(6, it.size * pw);
+  g.font = '500 ' + px + 'px ' + FONT;
+  const maxW = it.w ? it.w * pw : 0;
+  const lines = []; let idx = 0;
+  String(it.text || '').split('\n').forEach(para => {
+    let start = 0, lastSpace = -1, i = 0;
+    while (i < para.length) {
+      if (maxW && i > start && g.measureText(para.slice(start, i + 1)).width > maxW) {
+        const end = lastSpace >= start ? lastSpace + 1 : i;
+        lines.push({ s: idx + start, e: idx + end, t: para.slice(start, end) });
+        start = end; lastSpace = -1; i = start; continue;
+      }
+      if (para[i] === ' ') lastSpace = i;
+      i++;
+    }
+    lines.push({ s: idx + start, e: idx + para.length, t: para.slice(start) });
+    idx += para.length + 1;
+  });
+  return { px, lh: px * 1.25, lines };
+}
+function textBox(it, x0, y0, pw, ph) {
+  const L = layoutText(it, pw);
+  const w = it.w ? it.w * pw : Math.max(L.px * 2, ...L.lines.map(l => ctx.measureText(l.t).width));
+  return { x: x0 + it.x * pw, y: y0 + it.y * ph, w, h: Math.max(1, L.lines.length) * L.lh, L };
+}
+function hitText(it, x, y, x0, y0, pw, ph) {
+  const b = textBox(it, x0, y0, pw, ph);
+  return x >= b.x - 12 && x <= b.x + b.w + 12 && y >= b.y - 12 && y <= b.y + b.h + 12;
+}
+function indexAt(it, x, y, x0, y0, pw, ph) {
+  const b = textBox(it, x0, y0, pw, ph), L = b.L;
+  const li = clamp(Math.floor((y - b.y) / L.lh), 0, L.lines.length - 1);
+  const ln = L.lines[li];
+  let best = 0, bestD = Infinity;
+  for (let k = 0; k <= ln.t.length; k++) {
+    const d = Math.abs(b.x + ctx.measureText(ln.t.slice(0, k)).width - x);
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  return clamp(ln.s + best, 0, String(it.text || '').length);
+}
+
+/* ================= RENDER ================= */
+let raf = 0;
+function draw() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+const inkColor = c => (c === 'ink' ? (isDarkBg() ? '#f8fafc' : '#111827') : c);
+
+function render() {
+  if (!stageW) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = room.theme === 'black' ? '#05070a' : '#d9dfeb'; ctx.fillRect(0, 0, stageW, stageH);
+  const { x0, y0, pw, ph } = pageRect(), g = geom();
+  const pdf = room.mode === 'pdf';
+  ctx.fillStyle = pdf ? '#ffffff' : (isDarkBg() ? '#10141b' : '#ffffff'); ctx.fillRect(x0, y0, pw, ph);
+  if (pdf) {
+    const im = imgCache[curPage];
+    if (im) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im, x0, y0, pw, ph); }
+    else { ctx.fillStyle = '#64748b'; ctx.font = '16px ' + FONT; ctx.textAlign = 'center'; ctx.fillText('Loading page…', g.w / 2, g.h / 2); }
+  }
+  items.forEach(it => { if (it.page === curPage && !(editing && editing.id === it.id)) drawItem(it, x0, y0, pw, ph, false); });
+  if (editing && editing.page === curPage) { drawItem(editing, x0, y0, pw, ph, false); drawEditFrame(x0, y0, pw, ph); } else handlePos = null;
+  if (drawing) drawItem(drawing, x0, y0, pw, ph, false);
+  drawPointer(isT ? ptr : rptr, x0, y0, pw, ph);
+  if (eraserPos) {
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.fillStyle = 'rgba(239,68,68,.12)';
+    ctx.beginPath(); ctx.arc(eraserPos.x, eraserPos.y, ERASE_R[sizeIdx], 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+}
+
+function drawItem(it, x0, y0, pw, ph, isEdit, c) {
+  const g = c || ctx, col = inkColor(it.color);
+  if (it.kind === 'text') {
+    const L = layoutText(it, pw, g);
+    g.font = '500 ' + L.px + 'px ' + FONT; g.fillStyle = col; g.textAlign = 'left'; g.textBaseline = 'top';
+    L.lines.forEach((ln, i) => g.fillText(ln.t, x0 + it.x * pw, y0 + it.y * ph + i * L.lh));
+    g.textBaseline = 'alphabetic';
+    return;
+  }
+  const paths = it.paths || (it.pts ? [it.pts] : []);
+  g.strokeStyle = col; g.lineWidth = Math.max(1, it.size * pw); g.lineCap = g.lineJoin = 'round';
+  for (const p of paths) {
+    if (!p || p.length < 2) continue;
+    g.beginPath(); g.moveTo(x0 + p[0] * pw, y0 + p[1] * ph);
+    if (p.length === 2) g.lineTo(x0 + p[0] * pw + 0.1, y0 + p[1] * ph);
+    for (let i = 2; i + 1 < p.length; i += 2) g.lineTo(x0 + p[i] * pw, y0 + p[i + 1] * ph);
+    g.stroke();
+  }
+}
+
+/* dashed frame around the text field being edited, a handle to change its width, and the caret */
+function drawEditFrame(x0, y0, pw, ph) {
+  const e = editing, b = textBox(e, x0, y0, pw, ph), L = b.L;
+  const fx = b.x - 6, fy = b.y - 4, fw = b.w + 12, fh = b.h + 8;
+  ctx.save();
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]); ctx.strokeRect(fx, fy, fw, fh);
+  ctx.setLineDash([]);
+  handlePos = { x: fx + fw, y: fy + fh / 2 };
+  ctx.fillStyle = '#3b82f6'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(handlePos.x, handlePos.y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (Math.floor(Date.now() / 500) % 2 === 0) {
+    const idx = clamp(kb.selectionStart == null ? e.text.length : kb.selectionStart, 0, e.text.length);
+    let li = 0; for (let i = 0; i < L.lines.length; i++) if (L.lines[i].s <= idx) li = i;
+    const ln = L.lines[li];
+    ctx.font = '500 ' + L.px + 'px ' + FONT;
+    const cx = b.x + ctx.measureText(ln.t.slice(0, idx - ln.s)).width;
+    ctx.fillStyle = inkColor(e.color); ctx.fillRect(cx, b.y + li * L.lh, Math.max(2, L.px * 0.06), L.px);
+  }
+  ctx.restore();
+}
+
+function drawPointer(p, x0, y0, pw, ph) {
+  if (!p) return;
+  const visible = p.on || (Date.now() - (p.t || 0) < 1500);
+  if (!visible) return;
+  const x = x0 + p.x * pw, y = y0 + p.y * ph;
+  ctx.fillStyle = 'rgba(239,68,68,.25)'; ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ef4444'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+}
+setInterval(() => { if (editing || (rptr && Date.now() - (rptr.t || 0) < 1800) || (isT && ptr.on)) draw(); }, 400);
+document.addEventListener('selectionchange', () => { if (editing) draw(); });
+
+/* ================= BACKGROUND (PDF pages) ================= */
+async function getPageImg(i) {
+  if (imgCache[i]) return imgCache[i];
+  const rid = roomId;
+  const d = await roomsCol().doc(rid).collection('pages').doc(String(i)).get();
+  if (!d.exists || rid !== roomId) return null;
+  const im = new Image(); im.src = d.data().img;
+  await new Promise(r => { im.onload = r; im.onerror = r; });
+  imgCache[i] = im; return im;
+}
+async function loadBg() {
+  if (room.mode !== 'pdf' || !roomId) return;
+  const need = [curPage, curPage + 1].filter(n => n < (room.pages || 1) && !imgCache[n]);
+  for (const n of need) {
+    try { await getPageImg(n); if (n === curPage) draw(); } catch (e) { /* ignore */ }
+  }
+}
+
+/* ================= ERASER: gradual. Cuts lines, erases typed letters, never touches the PDF ================= */
+/* returns the pieces of the line that survive, or null when the eraser did not touch it */
+function erasePaths(it, x, y, x0, y0, pw, ph, radius) {
+  const source = it.paths || (it.pts ? [it.pts] : []);
+  const limit = radius + Math.max(1, (it.size * pw) / 2);
+
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const p of source) {
+    for (let i = 0; i + 1 < p.length; i += 2) {
+      const sx = x0 + p[i] * pw, sy = y0 + p[i + 1] * ph;
+      if (sx < minx) minx = sx; if (sx > maxx) maxx = sx;
+      if (sy < miny) miny = sy; if (sy > maxy) maxy = sy;
+    }
+  }
+  if (x < minx - limit || x > maxx + limit || y < miny - limit || y > maxy + limit) return null;
+
+  let hit = false;
+  const result = [];
+  for (const path of source) {
+    if (!path || path.length < 2) continue;
+    if (path.length === 2) {               /* a single dot */
+      const sx = x0 + path[0] * pw, sy = y0 + path[1] * ph;
+      if (Math.hypot(sx - x, sy - y) <= limit) hit = true; else result.push(path);
+      continue;
+    }
+    let cur = [];
+    const flush = () => { if (cur.length >= 4) result.push(cur); cur = []; };
+    for (let i = 0; i + 3 < path.length; i += 2) {
+      const ax = x0 + path[i] * pw, ay = y0 + path[i + 1] * ph;
+      const bx = x0 + path[i + 2] * pw, by = y0 + path[i + 3] * ph;
+      const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 3));
+      for (let j = (i === 0 ? 0 : 1); j <= steps; j++) {
+        const t = j / steps;
+        const sx = ax + (bx - ax) * t, sy = ay + (by - ay) * t;
+        if (Math.hypot(sx - x, sy - y) > limit) {
+          cur.push(path[i] + (path[i + 2] - path[i]) * t, path[i + 1] + (path[i + 3] - path[i + 1]) * t);
+        } else { hit = true; flush(); }
+      }
+    }
+    flush();
+  }
+  return hit ? result : null;
+}
+
+/* typed text: only the letters the eraser touches become blank */
+function eraseTextChars(it, x, y, x0, y0, pw, ph, r) {
+  const b = textBox(it, x0, y0, pw, ph), L = b.L;
+  if (x < b.x - r || x > b.x + b.w + r || y < b.y - r || y > b.y + b.h + r) return null;
+  const chars = String(it.text || '').split('');
+  let hit = false;
+  L.lines.forEach((ln, li) => {
+    const ty = b.y + li * L.lh;
+    if (y + r < ty || y - r > ty + L.lh) return;
+    for (let k = 0; k < ln.t.length; k++) {
+      if (ln.t[k] === ' ') continue;
+      const cx1 = b.x + ctx.measureText(ln.t.slice(0, k)).width, cx2 = b.x + ctx.measureText(ln.t.slice(0, k + 1)).width;
+      const nx = Math.max(cx1, Math.min(x, cx2)), ny = Math.max(ty, Math.min(y, ty + L.lh));
+      if (Math.hypot(x - nx, y - ny) <= r) { chars[ln.s + k] = ' '; hit = true; }
+    }
+  });
+  return hit ? chars.join('') : null;
+}
+
+function queueErase(id, change) {
+  erasePending.set(id, change);
+  eraseMem.set(id, { change, until: Date.now() + 6000 });
+  clearTimeout(eraseSaveTimer);
+  eraseSaveTimer = setTimeout(flushEraseSaves, 150);
+}
+async function flushEraseSaves() {
+  clearTimeout(eraseSaveTimer); eraseSaveTimer = null;
+  if (!roomId || !erasePending.size) return;
+  const pending = new Map(erasePending); erasePending.clear();
+  const col = roomsCol().doc(roomId).collection('strokes');
+  await Promise.all([...pending].map(([id, change]) => {
+    const ref = col.doc(id);
+    let op;
+    if (change === null) op = ref.delete();
+    else if (change.paths) op = ref.update({ paths: change.paths.map(p => ({ p: p.map(v => +v.toFixed(4)) })), pts: firebase.firestore.FieldValue.delete() });
+    else op = ref.update({ text: change.text });
+    return op.catch(err => { if (err && err.code !== 'not-found') toast('Could not save the erase.'); });
+  }));
+}
+
+function eraseAt(x, y) {
+  eraserPos = { x, y };
+  const { x0, y0, pw, ph } = pageRect(), radius = ERASE_R[sizeIdx];
+  items = items.map(it => {
+    if (it.page !== curPage || gone.has(it.id) || !(isT || it.uid === user.uid)) return it;
+    if (it.kind === 'text') {
+      const nt = eraseTextChars(it, x, y, x0, y0, pw, ph, radius);
+      if (nt === null) return it;
+      if (!nt.trim()) { gone.add(it.id); queueErase(it.id, null); return null; }
+      queueErase(it.id, { text: nt });
+      return { ...it, text: nt };
+    }
+    const res = erasePaths(it, x, y, x0, y0, pw, ph, radius);
+    if (!res) return it;
+    if (!res.length) { gone.add(it.id); queueErase(it.id, null); return null; }
+    queueErase(it.id, { paths: res });
+    const u = { ...it, paths: res }; delete u.pts; return u;
+  }).filter(Boolean);
+  draw();
+}
+
+/* ================= TOUCH: draw, type, erase, point, zoom ================= */
+const pts = new Map();
+let drawing = null, panOne = null, pinch = null, hadPinch = false;
+const loc = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); cv.setPointerCapture(e.pointerId);
+  const p = loc(e); pts.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false });
+  if (pts.size === 2) { drawing = null; panOne = null; eraserPos = null; resizing = false; startPinch(); return; }
+  if (pts.size > 2) return;
+  if (mode === 'pen' && canWrite()) {
+    const q = toPage(p.x, p.y);
+    drawing = { kind: 'pen', page: curPage, color, size: PEN[sizeIdx], pts: [q[0], q[1]] };
+  } else if (mode === 'erase' && canWrite()) {
+    eraseAt(p.x, p.y);
+  } else if (mode === 'text' && canWrite() && editing && handlePos && Math.hypot(p.x - handlePos.x, p.y - handlePos.y) < 32) {
+    resizing = true;
+  } else panOne = { x: p.x, y: p.y };
+});
+cv.addEventListener('pointermove', e => {
+  const o = pts.get(e.pointerId); if (!o) return;
+  const p = loc(e);
+  if (Math.hypot(p.x - o.sx, p.y - o.sy) > 8) o.moved = true;
+  o.x = p.x; o.y = p.y;
+  if (pts.size === 2 && pinch) { doPinch(); return; }
+  if (resizing && editing) {
+    const q = toPage(p.x, p.y);
+    editing.w = clamp(q[0] - editing.x, 0.08, 1 - editing.x); draw(); return;
+  }
+  if (drawing) { const q = toPage(p.x, p.y); drawing.pts.push(q[0], q[1]); draw(); return; }
+  if (mode === 'erase' && pts.size === 1 && canWrite()) { eraseAt(p.x, p.y); return; }
+  if (panOne && pts.size === 1 && view.s > 1.01) {
+    view.tx += p.x - panOne.x; view.ty += p.y - panOne.y; panOne = { x: p.x, y: p.y };
+    clampView(); draw(); viewDirty = true; pushView(false);
+  }
+});
+function pointerEnd(e) {
+  const o = pts.get(e.pointerId); pts.delete(e.pointerId);
+  if (pts.size < 2) pinch = null;
+  if (resizing) { resizing = false; syncText(); }
+  else if (drawing && pts.size === 0) commitStroke();
+  else if (o && !o.moved && pts.size === 0 && !hadPinch && mode === 'text' && canWrite()) textTap(o.sx, o.sy);
+  if (pts.size === 0) {
+    if (eraserPos) { eraserPos = null; draw(); }
+    flushEraseSaves();
+    if (viewDirty) { viewDirty = false; pushView(true); }
+    hadPinch = false; panOne = null;
+  }
+}
+cv.addEventListener('pointerup', pointerEnd);
+cv.addEventListener('pointercancel', pointerEnd);
+
+function startPinch() {
+  const [a, b] = [...pts.values()];
+  hadPinch = true;
+  pinch = { d0: Math.max(10, dist(a, b)), s0: view.s, p0: toPage((a.x + b.x) / 2, (a.y + b.y) / 2) };
+}
+function doPinch() {
+  const [a, b] = [...pts.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, g = geom();
+  const s = clamp(pinch.s0 * dist(a, b) / pinch.d0, 1, MAX_ZOOM);
+  view.s = s;
+  view.tx = mx - g.w / 2 - (pinch.p0[0] - 0.5) * g.pw * s;
+  view.ty = my - g.h / 2 - (pinch.p0[1] - 0.5) * g.ph * s;
+  clampView(); draw(); viewDirty = true; pushView(false);
+}
+
+async function commitStroke() {
+  const d = drawing; drawing = null; draw();
+  if (!d || !roomId) return;
+  await roomsCol().doc(roomId).collection('strokes').add({
+    kind: 'pen', page: d.page, color: d.color, size: d.size, pts: d.pts.map(v => +v.toFixed(4)), uid: user.uid, t: Date.now()
+  }).catch(e => toast('Could not save: ' + (e.code || e.message)));
+}
+
+/* ---- typing on the board with the keyboard ---- */
+const kb = $('kb');
+function textTap(sx, sy) {
+  const { x0, y0, pw, ph } = pageRect();
+  if (editing && editing.page === curPage && hitText(editing, sx, sy, x0, y0, pw, ph)) {
+    const idx = indexAt(editing, sx, sy, x0, y0, pw, ph);
+    kb.focus({ preventScroll: true }); kb.setSelectionRange(idx, idx); draw(); return;
+  }
+  const hit = [...items].reverse().find(it => it.kind === 'text' && it.page === curPage && !gone.has(it.id) && (isT || it.uid === user.uid) && hitText(it, sx, sy, x0, y0, pw, ph));
+  if (hit) { startEdit(hit, indexAt(hit, sx, sy, x0, y0, pw, ph)); return; }
+  const q = toPage(sx, sy);
+  startText(clamp(q[0], 0, 0.9), clamp(q[1], 0, 0.97));
+}
+function startText(x, y) {
+  finishText();
+  editing = { id: newId(), kind: 'text', page: curPage, color, size: TXT[sizeIdx], x, y, w: clamp(0.94 - x, 0.2, 0.9), text: '', uid: user.uid, created: false, t: Date.now() };
+  kb.value = ''; kb.focus({ preventScroll: true }); updateTools(); draw();
+}
+function startEdit(t, idx) {
+  finishText();
+  editing = { ...t, created: true };
+  kb.value = t.text || ''; kb.focus({ preventScroll: true }); kb.setSelectionRange(idx, idx);
+  updateTools(); draw();
+}
+kb.addEventListener('input', () => {
+  if (!editing) return;
+  editing.text = kb.value; draw();
+  clearTimeout(textTimer); textTimer = setTimeout(syncText, 350);
+});
+async function syncText() {
+  const e = editing; if (!e || !roomId) return;
+  const ref = roomsCol().doc(roomId).collection('strokes').doc(e.id);
+  try {
+    if (!e.text.trim()) { if (e.created) { await ref.delete(); e.created = false; } return; }
+    await ref.set({ kind: 'text', page: e.page, color: e.color, size: e.size, x: +e.x.toFixed(4), y: +e.y.toFixed(4), w: +(e.w || 0).toFixed(4), text: e.text, uid: e.uid, t: e.t });
+    e.created = true;
+  } catch (err) { toast('Could not save text: ' + (err.code || err.message)); }
+}
+async function finishText() {
+  clearTimeout(textTimer);
+  if (editing) await syncText();
+  editing = null; handlePos = null; kb.value = ''; updateTools(); draw();
+}
+$('doneTxt').onclick = async () => { await finishText(); kb.blur(); };
+
+/* ---- pointer pad: moves the red dot like a mouse ---- */
+const pad = $('pad'); let padLast = null, lastDc = 0, lastFs = 0;
+pad.addEventListener('pointerdown', e => { e.preventDefault(); pad.setPointerCapture(e.pointerId); padLast = { x: e.clientX, y: e.clientY }; ptr.on = true; ptr.t = Date.now(); sendPtr(true); draw(); });
+pad.addEventListener('pointermove', e => {
+  if (!padLast) return;
+  const dx = e.clientX - padLast.x, dy = e.clientY - padLast.y; padLast = { x: e.clientX, y: e.clientY };
+  const g = geom();
+  ptr.x = clamp(ptr.x + dx * 1.6 / (g.pw * view.s), 0, 1); ptr.y = clamp(ptr.y + dy * 1.6 / (g.ph * view.s), 0, 1);
+  ptr.on = true; ptr.t = Date.now(); sendPtr(false); draw();
+});
+const padEnd = () => { padLast = null; ptr.on = false; ptr.t = Date.now(); sendPtr(true); draw(); };
+pad.addEventListener('pointerup', padEnd); pad.addEventListener('pointercancel', padEnd);
+
+function sendPtr(final) {
+  const m = { k: 'ptr', x: +ptr.x.toFixed(4), y: +ptr.y.toFixed(4), on: ptr.on }, now = Date.now();
+  const chans = gcall ? [...gcall.peers.values()].map(p => p.dc).filter(d => d && d.readyState === 'open') : (dc && dc.readyState === 'open' ? [dc] : []);
+  if (chans.length && (final || now - lastDc > 30)) { chans.forEach(ch => { try { ch.send(JSON.stringify(m)); } catch (e) {} }); lastDc = now; }
+  if ((!chans.length || gcall) && roomId && (final || now - lastFs > 400)) {
+    lastFs = now; roomsCol().doc(roomId).update({ pointer: { x: m.x, y: m.y, on: m.on, t: now } }).catch(() => {});
+  }
+}
+function setRemotePtr(p) { rptr = { x: p.x, y: p.y, on: !!p.on, t: Date.now() }; draw(); }
+
+/* ================= TOOLS UI ================= */
+function buildColors() {
+  const box = $('cols'); box.innerHTML = '';
+  COLORS.forEach(c => {
+    const b = document.createElement('button'); b.className = 'cdot' + (c === color ? ' sel' : '');
+    b.style.background = c === 'ink' ? 'linear-gradient(135deg,#111827 50%,#f8fafc 50%)' : c;
+    b.onclick = () => { color = c; if (editing) { editing.color = c; syncText(); } buildColors(); draw(); };
+    box.appendChild(b);
+  });
+}
+function updateTools() {
+  const w = canWrite();
+  $('mPen').classList.toggle('hide', !w); $('mText').classList.toggle('hide', !w); $('mEra').classList.toggle('hide', !w);
+  $('mPtr').classList.toggle('hide', !isT);
+  $('cols').classList.toggle('hide', !w); $('szBtn').classList.toggle('hide', !w); $('undo').classList.toggle('hide', !w);
+  $('zoomReset').classList.toggle('hide', !isT);
+  $('mPen').classList.toggle('on', mode === 'pen'); $('mText').classList.toggle('on', mode === 'text');
+  $('mEra').classList.toggle('on', mode === 'erase'); $('mPtr').classList.toggle('on', mode === 'pointer');
+  $('doneTxt').classList.toggle('hide', !(mode === 'text' && w));
+  $('szBtn').textContent = 'Size ' + SZN[sizeIdx];
+  $('pager').classList.toggle('hide', !isT);
+  $('pg').textContent = (curPage + 1) + ' / ' + (room.pages || 1);
+}
+function setMode(m) {
+  if (m === 'pointer' && !isT) return;
+  if ((m === 'pen' || m === 'text' || m === 'erase') && !canWrite()) return;
+  if (mode === 'text' && m !== 'text') finishText();
+  flushEraseSaves();
+  mode = m; eraserPos = null;
+  if (m === 'text') kb.focus({ preventScroll: true }); else kb.blur();
+  updateTools(); setTimeout(relayout, 90); draw();
+}
+$('mPen').onclick = () => setMode('pen');
+$('mText').onclick = () => setMode('text');
+$('mEra').onclick = () => setMode('erase');
+$('mPtr').onclick = () => setMode('pointer');
+$('szBtn').onclick = () => { sizeIdx = (sizeIdx + 1) % 3; if (editing) { editing.size = TXT[sizeIdx]; syncText(); } updateTools(); draw(); };
+$('undo').onclick = async () => {
+  if (editing) { editing.text = ''; kb.value = ''; await finishText(); return; }
+  const mine = items.filter(i => i.uid === user.uid && i.page === curPage).pop();
+  if (mine) { gone.add(mine.id); items = items.filter(i => i.id !== mine.id); draw(); roomsCol().doc(roomId).collection('strokes').doc(mine.id).delete().catch(() => { gone.delete(mine.id); }); }
+};
+$('prev').onclick = () => goPage(curPage - 1);
+$('next').onclick = () => goPage(curPage + 1);
+function goPage(p) {
+  if (p < 0 || !isT) return;
+  const max = room.pages || 1;
+  finishText(); flushEraseSaves();
+  if (p >= max) { if (room.mode === 'pdf') return; roomsCol().doc(roomId).update({ page: p, pages: p + 1, ...resetViewDoc() }); }
+  else roomsCol().doc(roomId).update({ page: p, ...resetViewDoc() });
+  curPage = p; view = { s: 1, tx: 0, ty: 0 }; updateTools(); loadBg(); draw();
+}
+
+/* ================= MENU / TEACHER CONTROLS ================= */
+function openMenu() { $('drawer').classList.remove('hide'); renderDrawer(); renderDrawerStudents(); fillGroupEditor(); if (isT) loadClasses(); }
+function closeMenu() { $('drawer').classList.add('hide'); }
+$('menuBtn').onclick = openMenu; $('dClose').onclick = closeMenu;
+function renderDrawer() {
+  const grp = !!room.group;
+  $('dTitle').textContent = isT ? (room.name || 'Menu') : 'Menu';
+  $('dTeacher').classList.toggle('hide', !isT);
+  $('dGroup').classList.toggle('hide', !(isT && grp));
+  $('dCall').textContent = isT ? 'Call ' + (room.name || 'student') : 'Call teacher';
+  $('dCall').classList.toggle('hide', !!pc || !!gcall || (isT && grp));
+  $('dCallG').classList.toggle('hide', !(isT && grp) || !!pc || !!gcall);
+  $('menuBtn').textContent = isT ? 'Students' : 'Menu';
+  const vs = $('visSel'), want = grp ? 'group' : 'one';
+  if (vs.dataset.kind !== want) {
+    vs.dataset.kind = want;
+    vs.innerHTML = (grp ? '<option value="group">For this group</option>' : '<option value="one">For this student</option>') + '<option value="all">For all students</option>';
+  }
+}
+$('dCall').onclick = () => {
+  closeMenu();
+  if (isT) { if (room.dm) startCall(room.dm, roomId, room.name || 'student'); else toast('Open a student room first.'); }
+  else startCall('teacher', roomId, 'your teacher');
+};
+$('dCallG').onclick = () => { closeMenu(); startGroupCall(); };
+const jitsiUrl = rid => 'https://' + JITSI_DOMAIN + '/' + JITSI_PREFIX + rid + '#config.prejoinPageEnabled=false&config.startWithVideoMuted=true&userInfo.displayName=' + encodeURIComponent('"' + nameOf() + '"');
+function openBackup() {
+  if (!roomId) return;
+  window.open(jitsiUrl(roomId), '_blank');
+  if (callRef) callRef.update({ fallback: true }).catch(() => {});
+  if (gcall) gcall.peers.forEach(p => p.ref.update({ fallback: true }).catch(() => {}));
+  $('fbBtn').classList.add('hide');
+}
+$('dBackup').onclick = openBackup;
+$('fbBtn').onclick = openBackup;
+
+$('thWhite').onclick = () => roomsCol().doc(roomId).update({ theme: 'white' });
+$('thBlack').onclick = () => roomsCol().doc(roomId).update({ theme: 'black' });
+$('allowD').onchange = e => roomsCol().doc(roomId).update({ studentsCanDraw: e.target.checked });
+$('fit').onclick = () => {
+  if (room.mode === 'pdf') { toast('A PDF keeps its own shape.'); return; }
+  roomsCol().doc(roomId).update({ ratio: screenRatio(), ...resetViewDoc() }); view = { s: 1, tx: 0, ty: 0 };
+};
+$('clr').onclick = async () => { if (confirm('Clear this page?')) await wipe(roomId, 'strokes', curPage); };
+$('blank').onclick = async () => {
+  if (!confirm('Start a new blank board? This clears everything written.')) return;
+  await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {}; curPage = 0; view = { s: 1, tx: 0, ty: 0 };
+  await roomsCol().doc(roomId).update({ mode: 'blank', page: 0, pages: 1, ratio: screenRatio(), topic: '', ...resetViewDoc() });
+  closeMenu();
+};
+async function wipe(id, sub, onlyPage) {
+  const s = await roomsCol().doc(id).collection(sub).get();
+  let batch = db.batch(), n = 0;
+  for (const d of s.docs) {
+    if (onlyPage !== undefined && d.data().page !== onlyPage) continue;
+    batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+  }
+  await batch.commit();
+}
+
+/* ---- lesson topic ---- */
+$('topicSet').onclick = async () => {
+  if (!roomId) return;
+  await roomsCol().doc(roomId).update({ topic: $('topicIn').value.trim() });
+  toast('Topic set.');
+};
+
+/* ---- save a class (topic + optional document) ---- */
+const jpegFit = c => {
+  let cc = c;
+  for (let k = 0; k < 4; k++) {
+    for (const q of [0.88, 0.8, 0.7, 0.6]) { const url = cc.toDataURL('image/jpeg', q); if (url.length < 930000) return url; }
+    const n = document.createElement('canvas'); n.width = Math.round(cc.width * 0.8); n.height = Math.round(cc.height * 0.8);
+    n.getContext('2d').drawImage(cc, 0, 0, n.width, n.height); cc = n;
+  }
+  throw new Error('A page is too heavy');
+};
+async function renderPageImage(i, ink) {
+  let W2, H2, bgIm = null;
+  if (room.mode === 'pdf') {
+    bgIm = await getPageImg(i);
+    if (!bgIm) throw new Error('Page ' + (i + 1) + ' is missing');
+    W2 = bgIm.naturalWidth; H2 = bgIm.naturalHeight;
+  } else { W2 = 1800; H2 = Math.round(1800 / (room.ratio || 1.4)); }
+  const c = document.createElement('canvas'); c.width = W2; c.height = H2;
+  const x = c.getContext('2d');
+  x.fillStyle = bgIm ? '#fff' : (isDarkBg() ? '#10141b' : '#fff'); x.fillRect(0, 0, W2, H2);
+  if (bgIm) x.drawImage(bgIm, 0, 0, W2, H2);
+  if (ink) items.filter(it => it.page === i).forEach(it => drawItem(it, 0, 0, W2, H2, false, x));
+  return { url: jpegFit(c), ratio: W2 / H2 };
+}
+$('saveClass').onclick = async () => {
+  const title = ($('topicIn').value || room.topic || '').trim();
+  if (!title) { toast('Write the lesson topic first.'); return; }
+  const vis = $('visSel').value;
+  let target;
+  if (vis === 'all') target = { uid: 'all' };
+  else if (vis === 'group') target = { uid: 'group', uids: room.members || [] };
+  else if (room.dm) target = { uid: room.dm };
+  else { toast('Open a student room first.'); return; }
+  const attach = $('incDoc').checked, ink = $('incInk').checked;
+  const st = $('classStat'), btn = $('saveClass'); btn.disabled = true;
+  try {
+    const id = newId(), n = room.pages || 1;
+    let ratio = room.ratio || 1.4;
+    if (attach) {
+      for (let i = 0; i < n; i++) {
+        st.textContent = 'Preparing page ' + (i + 1) + ' of ' + n + '…';
+        const r = await renderPageImage(i, ink);
+        if (i === 0) ratio = r.ratio;
+        await db.collection('aulas').doc(id).collection('pages').doc(String(i)).set({ img: r.url });
+      }
+    }
+    await db.collection('aulas').doc(id).set({
+      title, ...target, roomId, studentName: room.name || '', hasDoc: attach, pages: attach ? n : 0, ratio, createdAt: Date.now()
+    });
+    if (title !== room.topic) await roomsCol().doc(roomId).update({ topic: title });
+    st.textContent = 'Class saved.'; toast('Class saved.');
+    loadClasses();
+  } catch (e) { st.textContent = 'Could not save the class: ' + (e.code || e.message); }
+  btn.disabled = false;
+};
+async function loadClasses() {
+  if (!roomId || !isT) return;
+  const box = $('classList');
+  try {
+    const s = await db.collection('aulas').where('roomId', '==', roomId).get();
+    const list = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt);
+    box.innerHTML = list.length ? '<p class="note">Saved classes (this room)</p>' : '';
+    list.forEach(c => {
+      const row = document.createElement('div'); row.className = 'item';
+      row.innerHTML = '<span><b>' + esc(c.title) + '</b><br><span class="note">' + new Date(c.createdAt).toLocaleDateString('en-GB') +
+        (c.uid === 'all' ? ' · all students' : (c.uid === 'group' ? ' · group' : '')) + (c.hasDoc ? ' · document' : '') + '</span></span><span></span>';
+      const sp = row.lastChild;
+      if (c.hasDoc) {
+        const a = document.createElement('a'); a.href = 'aula.html?id=' + encodeURIComponent(c.id); a.target = '_blank'; a.textContent = 'Open';
+        a.style.cssText = 'display:inline-block;padding:8px 12px;border-radius:10px;background:#143d78;color:#fff;text-decoration:none;font-size:14px;margin-right:6px';
+        sp.appendChild(a);
+      }
+      const x = document.createElement('button'); x.className = 'd'; x.textContent = 'Delete';
+      x.onclick = async () => {
+        if (!confirm('Delete this class?')) return;
+        const ps = await db.collection('aulas').doc(c.id).collection('pages').get();
+        const b = db.batch(); ps.docs.forEach(d => b.delete(d.ref)); await b.commit();
+        await db.collection('aulas').doc(c.id).delete(); loadClasses();
+      };
+      sp.appendChild(x); box.appendChild(row);
+    });
+  } catch (e) { box.textContent = ''; }
+}
+
+/* ---- PDF upload: high resolution pages ---- */
+$('upPdf').onclick = () => $('pdfIn').click();
+async function pageToJpeg(pg, targetW) {
+  const vp0 = pg.getViewport({ scale: 1 });
+  let w = targetW;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const vp = pg.getViewport({ scale: w / vp0.width });
+    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: x, viewport: vp }).promise;
+    for (const q of [0.9, 0.82, 0.72, 0.62]) {
+      const url = c.toDataURL('image/jpeg', q);
+      if (url.length < 930000) return { url, ratio: vp.width / vp.height };
+    }
+    w = Math.round(w * 0.82);
+  }
+  throw new Error('A page is too heavy');
+}
+$('pdfIn').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const st = $('pdfStat'); st.textContent = 'Reading PDF…';
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
+    await wipe(roomId, 'strokes'); await wipe(roomId, 'pages'); imgCache = {};
+    let ratio = 0.75;
+    for (let i = 1; i <= n; i++) {
+      st.textContent = 'Preparing page ' + i + ' of ' + n + '…';
+      const pg = await pdf.getPage(i);
+      const r = await pageToJpeg(pg, 2000);
+      if (i === 1) ratio = r.ratio;
+      await roomsCol().doc(roomId).collection('pages').doc(String(i - 1)).set({ img: r.url });
+    }
+    curPage = 0; view = { s: 1, tx: 0, ty: 0 };
+    await roomsCol().doc(roomId).update({ mode: 'pdf', page: 0, pages: n, ratio, ...resetViewDoc() });
+    st.textContent = 'PDF ready (' + n + ' pages)' + (pdf.numPages > n ? ' – first ' + n + ' only' : '');
+    closeMenu();
+  } catch (err) { st.textContent = 'Could not load this PDF: ' + (err.message || err); }
+  e.target.value = '';
+};
+
+/* ================= VOICE CALL (WebRTC, signalled through Firestore) ================= */
+let pc = null, dc = null, localStream = null, callRef = null, callRole = '', callUn = null, callTimer = 0, durTimer = 0, fbTimer = 0;
+let connected = false, incoming = null, fbShown = false, armed = false, gcall = null;
+let actx = null, ringTimer = null;
+document.addEventListener('pointerdown', () => {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (actx && actx.state === 'suspended') actx.resume();
+});
+function beep() {
+  if (actx) [0, 0.28].forEach((d, i) => {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = i ? 520 : 440; g.gain.value = 0.15; o.connect(g); g.connect(actx.destination);
+    o.start(actx.currentTime + d); o.stop(actx.currentTime + d + 0.2);
+  });
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+}
+const ringOn = () => { ringOff(); beep(); ringTimer = setInterval(beep, 1600); };
+const ringOff = () => { clearInterval(ringTimer); ringTimer = null; };
+
+async function iceServers() {
+  const base = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  const pub = [
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
+  let own = [];
+  if (METERED_APP && METERED_KEY) {
+    try {
+      const r = await fetch('https://' + METERED_APP + '.metered.live/api/v1/turn/credentials?apiKey=' + METERED_KEY);
+      if (r.ok) own = await r.json();
+    } catch (e) { /* ignore */ }
+  }
+  return [...base, ...(own.length ? own : pub)];
+}
+
+function listenCalls() {
+  const to = isT ? 'teacher' : user.uid;
+  db.collection('chamadas').where('toUid', '==', to).where('status', '==', 'ringing').onSnapshot(s => {
+    const c = s.docs.map(x => ({ id: x.id, ...x.data() })).filter(x => Date.now() - x.t < 60000).sort((a, b) => b.t - a.t)[0];
+    if (!c || pc || gcall) { $('ring').classList.add('hide'); ringOff(); incoming = null; return; }
+    incoming = c; $('ringName').textContent = c.fromName + (c.group ? ' (group class)' : ''); $('ring').classList.remove('hide'); ringOn();
+    if (autoAnswer) { autoAnswer = false; setTimeout(() => $('acc').click(), 400); }
+  });
+}
+async function getMic() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    return true;
+  } catch (e) { toast('Allow the microphone to make calls.'); return false; }
+}
+const waitIceFor = p => new Promise(res => {
+  if (p.iceGatheringState === 'complete') return res();
+  const t = setTimeout(res, 6000);
+  p.addEventListener('icegatheringstatechange', () => { if (p.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+});
+const waitIce = () => waitIceFor(pc);
+async function makePc(caller) {
+  callRole = caller ? 'caller' : 'callee'; connected = false; fbShown = false; armed = false;
+  pc = new RTCPeerConnection({ iceServers: await iceServers() });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ontrack = e => { $('rau').srcObject = e.streams[0]; $('rau').play().catch(() => {}); };
+  pc.ondatachannel = e => { dc = e.channel; bindDc(dc); };
+  pc.onconnectionstatechange = () => {
+    if (!pc) return;
+    if (pc.connectionState === 'connected') callConnected();
+    if (pc.connectionState === 'failed') showFallback('The call could not connect. Use the backup call.');
+  };
+}
+function armFallback() {
+  if (armed) return; armed = true;
+  clearTimeout(fbTimer);
+  fbTimer = setTimeout(() => { if (pc && !connected) showFallback('Not connecting. Use the backup call.'); }, 15000);
+}
+function showFallback(msg) {
+  $('callTxt').textContent = msg; $('callbar').classList.remove('hide'); $('fbBtn').classList.remove('hide');
+}
+function bindDc(ch) {
+  ch.onmessage = m => { try { const p = JSON.parse(m.data); if (p.k === 'ptr' && !isT) setRemotePtr(p); } catch (e) {} };
+}
+async function startCall(toUid, rid, label) {
+  if (pc || gcall) { toast('You are already in a call.'); return; }
+  if (!(await getMic())) return;
+  const ref = db.collection('chamadas').doc();
+  await makePc(true); callRef = ref;
+  dc = pc.createDataChannel('ptr'); bindDc(dc);
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitIce();
+    await ref.set({ fromUid: user.uid, fromName: isT ? 'Your teacher' : nameOf(), toUid, roomId: rid, status: 'ringing', t: Date.now(),
+      offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+  } catch (e) { toast('Could not start the call.'); cleanupCall(); return; }
+  showCallBar('Calling ' + label + '…'); renderDrawer();
+  watchCall(ref);
+  callTimer = setTimeout(() => { if (!connected && !armed) ref.update({ status: 'missed' }).catch(() => {}); }, 45000);
+}
+$('acc').onclick = async () => {
+  const c = incoming; if (!c) return;
+  ringOff(); $('ring').classList.add('hide'); incoming = null;
+  if (!(await getMic())) { db.collection('chamadas').doc(c.id).update({ status: 'declined' }).catch(() => {}); return; }
+  try {
+    if (isT && String(c.roomId).startsWith('dm_')) await ensureDm(c.fromUid, c.fromName);
+    const ref = db.collection('chamadas').doc(c.id);
+    await makePc(false); callRef = ref;
+    await pc.setRemoteDescription(c.offer);
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitIce();
+    await ref.update({ answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }, status: 'accepted' });
+    showCallBar('Connecting…'); renderDrawer();
+    watchCall(ref); armFallback();
+    if (roomId !== c.roomId) enterRoom(c.roomId);
+  } catch (e) { toast('Could not answer the call.'); cleanupCall(); }
+};
+$('dec').onclick = () => {
+  const c = incoming; if (!c) return;
+  ringOff(); $('ring').classList.add('hide'); incoming = null;
+  db.collection('chamadas').doc(c.id).update({ status: 'declined' }).catch(() => {});
+};
+function watchCall(ref) {
+  if (callUn) callUn();
+  callUn = ref.onSnapshot(s => {
+    const c = s.data(); if (!c || !pc) return;
+    if (callRole === 'caller' && c.answer && pc.signalingState === 'have-local-offer') pc.setRemoteDescription(c.answer).catch(() => {});
+    if (callRole === 'caller' && c.status === 'accepted') { armFallback(); if (roomId !== c.roomId) enterRoom(c.roomId); }
+    if (c.fallback && !fbShown) { fbShown = true; showFallback('Switched to the backup call. Tap to join.'); }
+    if (['declined', 'missed', 'ended'].includes(c.status)) {
+      if (c.status === 'declined') toast('Call declined.');
+      if (c.status === 'missed') toast('No answer.');
+      cleanupCall();
+    }
+  });
+}
+function callConnected() {
+  if (connected) return; connected = true; clearTimeout(callTimer); clearTimeout(fbTimer);
+  $('fbBtn').classList.add('hide');
+  const t0 = Date.now(); $('muteBtn').classList.remove('hide');
+  clearInterval(durTimer);
+  durTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $('callTxt').textContent = 'On call · ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }, 1000);
+  $('callTxt').textContent = 'On call · 00:00';
+}
+function showCallBar(t) { $('callTxt').textContent = t; $('muteBtn').classList.add('hide'); $('fbBtn').classList.add('hide'); $('callbar').classList.remove('hide'); }
+$('muteBtn').onclick = () => {
+  if (!localStream) return;
+  const t = localStream.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled; $('muteBtn').textContent = t.enabled ? 'Mute' : 'Unmute';
+};
+$('endBtn').onclick = () => { if (gcall) endGroup(); else hangup(); };
+function hangup() { if (callRef) callRef.update({ status: 'ended' }).catch(() => {}); cleanupCall(); }
+function cleanupCall() {
+  clearTimeout(callTimer); clearTimeout(fbTimer); clearInterval(durTimer);
+  if (callUn) { callUn(); callUn = null; }
+  if (dc) { try { dc.close(); } catch (e) {} dc = null; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  $('rau').srcObject = null; $('callbar').classList.add('hide'); $('fbBtn').classList.add('hide'); $('muteBtn').textContent = 'Mute';
+  callRef = null; connected = false; fbShown = false; armed = false; renderDrawer();
+}
+
+/* ================= GROUP CALL: the teacher's phone is the hub and mixes the audio ================= */
+async function startGroupCall() {
+  if (!isT || !room.group) return;
+  if (pc || gcall) { toast('You are already in a call.'); return; }
+  if (!(await getMic())) return;
+  let ac;
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); await ac.resume(); }
+  catch (e) { toast('Audio is not available on this phone.'); if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; } return; }
+  gcall = { ac, mic: ac.createMediaStreamSource(localStream), peers: new Map(), rid: roomId, fbShown: false };
+  showCallBar('Calling the group…'); renderDrawer();
+  const ice = await iceServers();
+  for (const uid of (room.members || [])) { try { await addPeer(uid, ice); } catch (e) { console.warn(e); } }
+  if (!gcall.peers.size) endGroup();
+}
+async function addPeer(uid, ice) {
+  const g = gcall;
+  const dest = g.ac.createMediaStreamDestination();
+  g.mic.connect(dest);
+  g.peers.forEach(p => { if (p.src) p.src.connect(dest); });
+  const pc2 = new RTCPeerConnection({ iceServers: ice });
+  pc2.addTrack(dest.stream.getAudioTracks()[0], dest.stream);
+  const ref = db.collection('chamadas').doc();
+  const peer = { uid, pc: pc2, dest, ref, dc: pc2.createDataChannel('ptr'), src: null, connected: false, accepted: false, timer: 0, un: null, audio: null };
+  g.peers.set(uid, peer);
+  pc2.ontrack = e => {
+    const stream = e.streams[0];
+    peer.audio = new Audio(); peer.audio.srcObject = stream; peer.audio.muted = true; peer.audio.play().catch(() => {});
+    peer.src = g.ac.createMediaStreamSource(stream);
+    peer.src.connect(g.ac.destination);
+    g.peers.forEach(o => { if (o !== peer) peer.src.connect(o.dest); });
+  };
+  pc2.onconnectionstatechange = () => {
+    if (pc2.connectionState === 'connected') { peer.connected = true; updateGroupBar(); }
+    if (pc2.connectionState === 'failed') showFallback('A student could not connect. They can use the backup call.');
+  };
+  await pc2.setLocalDescription(await pc2.createOffer());
+  await waitIceFor(pc2);
+  await ref.set({ fromUid: user.uid, fromName: 'Your teacher', toUid: uid, roomId: g.rid, group: true, status: 'ringing', t: Date.now(),
+    offer: { type: pc2.localDescription.type, sdp: pc2.localDescription.sdp } });
+  peer.un = ref.onSnapshot(s => {
+    const c = s.data(); if (!c || !gcall) return;
+    if (c.answer && pc2.signalingState === 'have-local-offer') pc2.setRemoteDescription(c.answer).catch(() => {});
+    if (c.status === 'accepted' && !peer.accepted) {
+      peer.accepted = true;
+      setTimeout(() => { if (gcall && !peer.connected) showFallback('Someone is not connecting. They can use the backup call.'); }, 15000);
+    }
+    if (c.fallback && !g.fbShown) { g.fbShown = true; showFallback('A student switched to the backup call. Tap to join.'); }
+    if (['declined', 'missed', 'ended'].includes(c.status)) dropPeer(uid);
+  });
+  peer.timer = setTimeout(() => { if (!peer.accepted) ref.update({ status: 'missed' }).catch(() => {}); }, 45000);
+}
+function updateGroupBar() {
+  if (!gcall) return;
+  const n = [...gcall.peers.values()].filter(p => p.connected).length;
+  $('callTxt').textContent = 'Group call · ' + n + ' student' + (n === 1 ? '' : 's');
+  $('muteBtn').classList.remove('hide');
+}
+function dropPeer(uid) {
+  const g = gcall; if (!g) return;
+  const p = g.peers.get(uid); if (!p) return;
+  clearTimeout(p.timer); if (p.un) p.un();
+  try { p.pc.close(); } catch (e) {}
+  try { if (p.src) p.src.disconnect(); } catch (e) {}
+  try { p.dest.disconnect(); } catch (e) {}
+  g.peers.delete(uid);
+  if (!g.peers.size) endGroup(); else updateGroupBar();
+}
+function endGroup() {
+  const g = gcall; if (!g) return; gcall = null;
+  g.peers.forEach(p => {
+    clearTimeout(p.timer); if (p.un) p.un();
+    p.ref.update({ status: 'ended' }).catch(() => {});
+    try { p.pc.close(); } catch (e) {}
+  });
+  try { g.ac.close(); } catch (e) {}
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  $('callbar').classList.add('hide'); $('fbBtn').classList.add('hide'); $('muteBtn').textContent = 'Mute';
+  renderDrawer();
+}
+
+/* ================= START ================= */
+buildColors(); updateTools(); relayout();
+</script>
+</body>
+</html>
